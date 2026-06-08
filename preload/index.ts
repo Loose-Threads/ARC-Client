@@ -93,7 +93,6 @@ const api = {
   autoStatusUpdateSchedule: (entryId: string, updates: any) => ipcRenderer.invoke('autostatus-update-schedule', entryId, updates),
   autoStatusDeleteSchedule: (entryId: string) => ipcRenderer.invoke('autostatus-delete-schedule', entryId),
   autoStatusUpdateSettings: (settings: any) => ipcRenderer.invoke('autostatus-update-settings', settings),
-  // Calendar API
   calendarFetch: () => ipcRenderer.invoke('calendar-fetch'),
   calendarGetStatus: () => ipcRenderer.invoke('calendar-get-status'),
   // OpenShock API

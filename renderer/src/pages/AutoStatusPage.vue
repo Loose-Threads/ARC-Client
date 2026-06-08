@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useAutoStatus, STATUS_TYPES, DAY_LABELS } from '../composables/useAutoStatus'
-import type { Preset, ScheduleEntry } from '../composables/useAutoStatus'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useAutoStatus, STATUS_TYPES, DAY_LABELS,  } from '../composables/useAutoStatus'
+import type { Preset, ScheduleEntry,  } from '../composables/useAutoStatus'
 
 const {
   presets,
   schedule,
+  
   settings,
   status,
   createPreset,
@@ -15,6 +16,9 @@ const {
   addSchedule,
   updateSchedule,
   deleteSchedule,
+  
+  
+  
   updateSettings
 } = useAutoStatus()
 
@@ -49,6 +53,14 @@ const newDays = ref<Set<number>>(new Set())
 const confirmDeleteId = ref<number | null>(null)
 const editingScheduleId = ref<string | null>(null)
 const editingScheduleName = ref('')
+
+const isDarkTheme = ref(false)
+let themeObserver: MutationObserver | null = null
+
+function syncThemeState() {
+  if (typeof document === 'undefined') return
+  isDarkTheme.value = document.body.classList.contains('dark-theme')
+}
 
 function onPresetFieldChange(preset: Preset, field: keyof Preset, value: string | null) {
   const updated = {
@@ -131,6 +143,26 @@ async function saveScheduleName(entryId: string) {
   editingScheduleId.value = null
   editingScheduleName.value = ''
 }
+
+function closeAccessTypeDropdown() {
+  
+}
+
+function onDocumentClick() {
+  
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  syncThemeState()
+  themeObserver = new MutationObserver(syncThemeState)
+  themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
+  themeObserver?.disconnect()
+})
+
 </script>
 
 <template>
@@ -229,6 +261,17 @@ async function saveScheduleName(entryId: string) {
         </div>
       </div>
     </div>
+
+    <div class="autostatus-section">
+      <div class="autostatus-section-header">
+        <h3>Location Rules</h3>
+        <span class="autostatus-section-hint">Automatically set status based on VRChat world, group, and instance type</span>
+      </div>
+
+
+
+    </div>
+
 
     <div class="autostatus-section">
       <div class="autostatus-section-header">
@@ -347,6 +390,23 @@ async function saveScheduleName(entryId: string) {
               Always allow status override
             </label>
             <small>When enabled, ARC will change your status even if it was set externally (via VRChat website or in-game). When disabled, ARC pauses automatic status changes until the next manual or OSC trigger.</small>
+          </div>
+
+          <div class="autostatus-field">
+            <label class="autostatus-override-label">
+              <input type="checkbox" :checked="settings.returnToInitial" @change="updateSettings({ returnToInitial: ($event.target as HTMLInputElement).checked })" />
+              Return to initial status
+            </label>
+            <small>When enabled, ARC reverts your VRChat status to what it was before ARC made any changes, whenever a schedule ends or you leave a matched location.</small>
+          </div>
+
+          <div class="autostatus-field">
+            <label>Priority</label>
+            <select :value="settings.prioritySource" @change="updateSettings({ prioritySource: ($event.target as HTMLSelectElement).value })">
+              <option value="schedule">Schedule over Location</option>
+              <option value="location">Location over Schedule</option>
+            </select>
+            <small>When both a schedule and a location rule match at the same time, the higher priority source determines your status.</small>
           </div>
         </div>
 
@@ -625,6 +685,129 @@ async function saveScheduleName(entryId: string) {
   color: #95a5a6;
 }
 
+.autostatus-match-row {
+  display: flex;
+  gap: 6px;
+}
+
+.autostatus-match-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.autostatus-match-row select {
+  width: auto;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.autostatus-checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.autostatus-dropdown-wrap {
+  position: relative;
+}
+
+.autostatus-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fafafa;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.autostatus-dropdown-trigger:hover {
+  border-color: #3498db;
+}
+
+.autostatus-dropdown-trigger:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+}
+
+.autostatus-dropdown-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.autostatus-dropdown-arrow {
+  flex-shrink: 0;
+  margin-left: 8px;
+  font-size: 10px;
+  color: #95a5a6;
+  transition: transform 0.2s ease;
+}
+
+.autostatus-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: #fff;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.autostatus-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.autostatus-dropdown-item:hover {
+  background: #f0f7ff;
+}
+
+.autostatus-dropdown-item input {
+  width: auto;
+  margin: 0;
+  accent-color: #3498db;
+}
+
+:global(body.dark-theme) .autostatus-dropdown-trigger {
+  background: #1e1e1e;
+  border-color: #454545;
+  color: #ecf0f1;
+}
+
+:global(body.dark-theme) .autostatus-dropdown-menu {
+  background: #2b2b2b;
+  border-color: #454545;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+:global(body.dark-theme) .autostatus-dropdown-item {
+  color: #ecf0f1;
+}
+
+:global(body.dark-theme) .autostatus-dropdown-item:hover {
+  background: #3a3a4a;
+}
+
 .autostatus-schedule-empty {
   text-align: center;
   padding: 24px;
@@ -864,6 +1047,14 @@ async function saveScheduleName(entryId: string) {
   background: #f8f9fa;
 }
 
+.autostatus-location-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
 @media (max-width: 900px) {
   .autostatus-banner,
   .autostatus-section-header {
@@ -965,5 +1156,12 @@ async function saveScheduleName(entryId: string) {
 :global(body.dark-theme) .autostatus-icon-btn {
   background: rgba(255, 255, 255, 0.08);
   color: #bdc3c7;
+}
+
+:global(body.dark-theme) .autostatus-location-status {
+  background: #1e1e1e;
+  border: 1px solid #454545;
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 </style>

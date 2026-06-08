@@ -40,6 +40,8 @@ export interface AutoStatusSettings {
   cooldownSeconds: number
   timeFormat: string
   alwaysAllowOverride: boolean
+  returnToInitial: boolean
+  prioritySource: 'schedule' | 'manual'
   [key: string]: any
 }
 
@@ -58,7 +60,8 @@ export function useAutoStatus() {
   const api = useElectronAPI()
   const presets = ref<Preset[]>([])
   const schedule = ref<ScheduleEntry[]>([])
-  const settings = ref<AutoStatusSettings>({ cooldownSeconds: 10, timeFormat: '24h', alwaysAllowOverride: false })
+  
+  const settings = ref<AutoStatusSettings>({ cooldownSeconds: 10, timeFormat: '24h', alwaysAllowOverride: false, returnToInitial: false, prioritySource: 'schedule' })
   const status = ref<AutoStatusStatus>({ lastAppliedPresetId: null, externallySet: false, avatarGuardActive: false, vrchatApiAvailable: false, lastOscValue: 0, currentStatus: null, currentStatusDescription: null })
 
   async function refresh() {
@@ -68,7 +71,8 @@ export function useAutoStatus() {
     ])
     presets.value = config.presets ?? []
     schedule.value = config.schedule ?? []
-    settings.value = { cooldownSeconds: 10, timeFormat: '24h', alwaysAllowOverride: false, ...config.settings }
+    
+    settings.value = { cooldownSeconds: 10, timeFormat: '24h', alwaysAllowOverride: false, returnToInitial: false, prioritySource: 'schedule', ...config.settings }
     status.value = { lastAppliedPresetId: null, externallySet: false, avatarGuardActive: false, vrchatApiAvailable: false, lastOscValue: 0, currentStatus: null, currentStatusDescription: null, ...s }
   }
   async function createPreset() {
@@ -106,6 +110,10 @@ export function useAutoStatus() {
     await api.autoStatusDeleteSchedule(entryId)
     await refresh()
   }
+  
+  
+  
+  
   async function updateSettings(updates: Partial<AutoStatusSettings>) {
     await api.autoStatusUpdateSettings(updates)
     settings.value = { ...settings.value, ...updates }

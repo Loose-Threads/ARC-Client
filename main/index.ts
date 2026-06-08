@@ -972,7 +972,7 @@ ipcMain.handle('check-vrchat-link', async () => {
     if (!wsManager || !wsManager.isConnected) {
       throw new Error('Not connected to ARC WebSocket server')
     }
-    debug.info(`Checking VRChat account link status`)
+    //debug.info(`Checking VRChat account link status`)
     const response = await wsManager.checkVRChatLink()
     //debug.info(`VRChat link status: ${response.linked ? 'linked' : 'not linked'}`)
     return response
@@ -1713,6 +1713,12 @@ ipcMain.handle('autostatus-update-settings', async (_event, settings: any) => {
   if (!autoStatusContainer) return { success: false, error: 'Not initialized' }
   return autoStatusContainer.updateSettings(settings)
 })
+// Location Rule IPC handlers
+ipcMain.handle('autostatus-get-location-rules', () => {
+  if (!autoStatusContainer) return []
+  return 
+})
+
 // Calendar IPC handlers
 ipcMain.handle('calendar-fetch', async () => {
   if (!calendarContainer) return { success: false, error: 'Not initialized' }
