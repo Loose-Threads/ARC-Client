@@ -138,6 +138,7 @@ async function saveScheduleName(entryId: string) {
     <div class="header">
       <h1>Auto-Status</h1>
       <p>Manage VRChat status presets and scheduling</p>
+      <p><b>Note: Please note this feature is experimental in client, It might break.</b></p>
     </div>
 
     <div class="autostatus-banner">
