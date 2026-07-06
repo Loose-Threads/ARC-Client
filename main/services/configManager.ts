@@ -7,15 +7,11 @@ import { encryptData, decryptData } from './encryption'
 interface AppSettings {
   enableWebSocketForwarding: boolean
   hyperateAutostart: boolean
-  whisperAutostart: boolean
+  voskAutostart: boolean
   oscleashAutostart: boolean
   ogbAutostart: boolean
   oscAutostart: boolean
   xsOverlayAutostart: boolean
-  // When true (default), ARC-Client sends autostatus telemetry
-  // to ARC-OSC. When false, snapshots are held in-process until
-  // the toggle is re-enabled.
-  telemetryEnabled: boolean
   theme: string
   lastUsername: string
   savedPassword: string
@@ -43,14 +39,14 @@ interface HyperateConfig {
   [key: string]: unknown
 }
 
-export interface WhisperCommandParam {
+export interface VoskCommandParam {
   address: string
   type: 'f' | 'i' | 'bool' | 's'
   value: string | number | boolean
   reverseValue?: string | number | boolean | null
 }
 
-export interface WhisperCommand {
+export interface VoskCommand {
   id: string
   name: string
   phrase: string
@@ -58,17 +54,17 @@ export interface WhisperCommand {
   matchType: 'exact' | 'contains'
   enabled: boolean
   category?: string
-  parameters: WhisperCommandParam[]
+  parameters: VoskCommandParam[]
 }
 
-export interface WhisperConfig {
-  modelPath: string | null
+export interface VoskConfig {
+  modelDir: string | null
   inputDeviceId: string | null
   minInputLevel: number
   inputGain: number
-  minUtteranceMs: number
+  minConfidence: number
   categories: string[]
-  commands: WhisperCommand[]
+  commands: VoskCommand[]
   [key: string]: unknown
 }
 
@@ -159,7 +155,7 @@ interface AppConfig {
   oscQueryUnsubscriptions: string[]
   windowState: WindowState
   hyperate: HyperateConfig
-  whisper: WhisperConfig
+  vosk: VoskConfig
   oscleash: OscLeashConfig
   vrchatapi: VRChatAPIConfig
   oscgoesbrrr: OscGoesbrrrConfig
@@ -187,12 +183,11 @@ class ConfigManager {
       appSettings: {
         enableWebSocketForwarding: false,
         hyperateAutostart: false,
-        whisperAutostart: false,
+        voskAutostart: false,
         oscleashAutostart: false,
         ogbAutostart: false,
         oscAutostart: false,
         xsOverlayAutostart: false,
-        telemetryEnabled: true,
         theme: 'light',
         lastUsername: '',
         savedPassword: '',
@@ -217,13 +212,13 @@ class ConfigManager {
         trackerNames: {},
         trackerStates: {}
       },
-      // Whisper configuration
-      whisper: {
-        modelPath: null,
+      // Vosk speech recognition configuration
+      vosk: {
+        modelDir: null,
         inputDeviceId: null,
-        minInputLevel: 0.02,
-        inputGain: 1.0,
-        minUtteranceMs: 600,
+        minInputLevel: 0,
+        inputGain: 1,
+        minConfidence: 0,
         categories: [],
         commands: []
       },
@@ -367,12 +362,11 @@ class ConfigManager {
       logLevel: this.config.logLevel || 'info',
       enableWebSocketForwarding: this.config.appSettings?.enableWebSocketForwarding || false,
       hyperateAutostart: this.config.appSettings?.hyperateAutostart || false,
-      whisperAutostart: this.config.appSettings?.whisperAutostart || false,
+      voskAutostart: this.config.appSettings?.voskAutostart || false,
       oscleashAutostart: this.config.appSettings?.oscleashAutostart || false,
       ogbAutostart: this.config.appSettings?.ogbAutostart || false,
       oscAutostart: this.config.appSettings?.oscAutostart || false,
       xsOverlayAutostart: this.config.appSettings?.xsOverlayAutostart || false,
-      telemetryEnabled: this.config.appSettings?.telemetryEnabled ?? true,
       theme: this.config.appSettings?.theme || 'light',
       lastUsername: this.config.appSettings?.lastUsername || '',
       savedPassword: this.config.appSettings?.savedPassword || '',
@@ -394,8 +388,8 @@ class ConfigManager {
     if (settings.hyperateAutostart !== undefined) {
       this.config.appSettings.hyperateAutostart = settings.hyperateAutostart
     }
-    if (settings.whisperAutostart !== undefined) {
-      this.config.appSettings.whisperAutostart = settings.whisperAutostart
+    if (settings.voskAutostart !== undefined) {
+      this.config.appSettings.voskAutostart = settings.voskAutostart
     }
     if (settings.oscleashAutostart !== undefined) {
       this.config.appSettings.oscleashAutostart = settings.oscleashAutostart
@@ -408,9 +402,6 @@ class ConfigManager {
     }
     if (settings.xsOverlayAutostart !== undefined) {
       this.config.appSettings.xsOverlayAutostart = settings.xsOverlayAutostart
-    }
-    if (settings.telemetryEnabled !== undefined) {
-      this.config.appSettings.telemetryEnabled = settings.telemetryEnabled
     }
     if (settings.theme !== undefined) {
       this.config.appSettings.theme = settings.theme
@@ -590,31 +581,30 @@ class ConfigManager {
     debug.info('HypeRate config updated in configuration manager')
     return this.saveConfig()
   }
-  // Vosk removed — legacy vosk config keys in userdata/config.json are
-  // silently ignored (no getter/setter needed). They won't be re-saved and
-  // will fall off naturally on the next config write.
-  getWhisperConfig(): WhisperConfig {
-    const stored = (this.config.whisper || {}) as Partial<WhisperConfig>
-    this.config.whisper = {
-      modelPath: stored.modelPath ?? null,
+  getVoskConfig(): VoskConfig {
+    const stored = (this.config.vosk || {}) as Partial<VoskConfig> & { modelPath?: string }
+    // Merge over defaults so partial/legacy vosk sections don't drop keys;
+    // adopt the legacy modelPath key from the old prototype schema if present
+    this.config.vosk = {
+      modelDir: stored.modelDir ?? stored.modelPath ?? null,
       inputDeviceId: stored.inputDeviceId ?? null,
+      minConfidence: typeof stored.minConfidence === 'number' ? stored.minConfidence : 0,
+      categories: Array.isArray(stored.categories) ? stored.categories : [],
       minInputLevel: typeof stored.minInputLevel === 'number' ? stored.minInputLevel : 0,
       inputGain: typeof stored.inputGain === 'number' ? stored.inputGain : 1,
-      minUtteranceMs: typeof stored.minUtteranceMs === 'number' ? stored.minUtteranceMs : 350,
-      categories: Array.isArray(stored.categories) ? stored.categories : [],
       commands: Array.isArray(stored.commands) ? stored.commands : []
     }
-    return { ...this.config.whisper }
+    return { ...this.config.vosk }
   }
-  updateWhisperConfig(whisperConfig: Partial<WhisperConfig>): boolean {
-    if (!this.config.whisper) {
-      this.config.whisper = {} as WhisperConfig
+  updateVoskConfig(voskConfig: Partial<VoskConfig>): boolean {
+    if (!this.config.vosk) {
+      this.config.vosk = {} as VoskConfig
     }
-    this.config.whisper = {
-      ...this.config.whisper,
-      ...whisperConfig
+    this.config.vosk = {
+      ...this.config.vosk,
+      ...voskConfig
     }
-    debug.info('Whisper config updated in configuration manager')
+    debug.info('Vosk config updated in configuration manager')
     return this.saveConfig()
   }
   getOSCLeashConfig(): OscLeashConfig {
