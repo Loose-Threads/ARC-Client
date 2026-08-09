@@ -29,20 +29,10 @@ export interface WhisperPreflightResult {
 
 export interface WhisperStatus {
   enabled: boolean
-  // Mirrors main/containers/whisper/whisper.ts's WhisperEngineState
-  // union, including the new 'preparing' / 'starting' / 'stopping'
-  // phases. The renderer treats 'preparing' / 'loading-model' / 'starting'
-  // all as "not yet listening" (button disabled, label "Starting...").
-  engineState:
-    | 'stopped'
-    | 'preparing'
-    | 'loading-model'
-    | 'starting'
-    | 'running'
-    | 'stopping'
-    | 'error'
+  engineState: 'stopped' | 'loading-model' | 'running' | 'error'
   modelState: 'missing' | 'invalid' | 'downloading' | 'extracting' | 'ready'
-  modelPath: string | null
+  modelDir: string | null
+  usingDefaultModel: boolean
   modelListUrl: string
   sampleRate: number | null
   inputDeviceId: string | null
@@ -84,7 +74,8 @@ const defaultStatus: WhisperStatus = {
   enabled: false,
   engineState: 'stopped',
   modelState: 'missing',
-  modelPath: null,
+  modelDir: null,
+  usingDefaultModel: true,
   modelListUrl: 'https://github.com/ggerganov/whisper.cpp/tree/main/models',
   sampleRate: null,
   inputDeviceId: null,
@@ -346,7 +337,7 @@ export function useWhisper() {
     return result
   }
 
-  async function updateSettings(partialConfig: { minInputLevel?: number; inputGain?: number; modelPath?: string | null; minUtteranceMs?: number }) {
+  async function updateSettings(partialConfig: { minInputLevel?: number; inputGain?: number; modelDir?: string | null; minUtteranceMs?: number }) {
     const result = await api.whisperUpdateConfig(partialConfig)
     await refreshStatus()
     return result

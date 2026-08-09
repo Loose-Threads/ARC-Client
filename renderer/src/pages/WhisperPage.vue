@@ -12,13 +12,7 @@
         <span>{{ statusText }}</span>
       </div>
       <div class="whisper-action-row">
-        <button
-          class="btn btn-primary"
-          :disabled="busy || isStartingOrPreparing || (!status.enabled && status.modelState !== 'ready')"
-          @click="handleToggle"
-        >
-          {{ toggleButtonLabel }}
-        </button>
+        <button class="btn btn-primary" :disabled="busy || status.engineState === 'loading-model' || (!status.enabled && status.modelState !== 'ready')" @click="handleToggle">{{ toggleButtonLabel }}</button>
         <div class="autostart-toggle-container">
           <span class="autostart-label">Auto-start:</span>
           <div class="autostart-toggle-slider" role="button" tabindex="0" @click="handleToggleAutostart" @keyup.enter="handleToggleAutostart" @keyup.space.prevent="handleToggleAutostart">
@@ -75,7 +69,7 @@
     <div class="card">
       <h3>Speech Model</h3>
       <p class="whisper-field-text">{{ modelStateText }}</p>
-      <p class="whisper-model-path">{{ status.modelPath ?? 'No model selected' }}</p>
+      <p class="whisper-model-path">{{ status.modelDir }}<span v-if="status.usingDefaultModel"> (default)</span></p>
       <div v-if="downloading || downloadProgress?.state === 'error'" class="whisper-progress-block">
         <div class="whisper-progress">
           <div class="whisper-progress-fill" :style="{ width: `${downloadProgress?.percent ?? 0}%` }"></div>
@@ -87,11 +81,11 @@
         <button class="btn btn-secondary" @click="openModelList">Browse All Models</button>
       </div>
       <div class="form-group whisper-top-gap">
-        <label>Custom model file <span class="whisper-hint">(absolute path to a single .bin ggml model file)</span></label>
+        <label>Custom model file <span class="whisper-hint">(a single .bin ggml model file from the model list)</span></label>
         <div class="whisper-model-dir-row">
-          <input type="text" v-model="modelPathDraft" placeholder="C:\path\to\ggml-tiny.en.bin" />
+          <input type="text" v-model="modelDirDraft" placeholder="C:\path\to\ggml-tiny.en.bin" />
           <button class="btn btn-secondary btn-small" @click="applyModelDir">Apply</button>
-          <button v-if="status.modelPath" class="btn btn-secondary btn-small" @click="clearModelPath">Clear</button>
+          <button v-if="!status.usingDefaultModel" class="btn btn-secondary btn-small" @click="useDefaultModelDir">Use Default</button>
         </div>
         <p v-if="modelDirError" class="whisper-error-text">{{ modelDirError }}</p>
       </div>
@@ -352,7 +346,6 @@ const gainDraft = ref(100)
 const minUtteranceDraft = ref(350)
 const modelDirDraft = ref('')
 const modelDirError = ref('')
-const modelPathDraft = ref('')
 const newCategoryName = ref('')
 const categoryFilter = ref<string>('__all__')
 
@@ -369,33 +362,20 @@ const statusClass = computed(() => {
   const s = status.value
   if (s.engineState === 'error') return 'status-error'
   if (s.engineState === 'running') return 'status-connected'
-  // preparing / loading-model / starting all show the "busy" indicator
-  if (s.engineState === 'preparing' || s.engineState === 'loading-model' || s.engineState === 'starting') {
-    return 'status-connecting'
-  }
+  if (s.engineState === 'loading-model') return 'status-connecting'
   return 'status-disconnected'
-})
-
-const isStartingOrPreparing = computed(() => {
-  const e = status.value.engineState
-  return e === 'preparing' || e === 'loading-model' || e === 'starting'
 })
 
 const statusText = computed(() => {
   const s = status.value
   if (s.engineState === 'error') return `Error: ${s.lastError || 'Unknown error'}`
-  if (s.engineState === 'preparing') return 'Preparing engine...'
   if (s.engineState === 'loading-model') return 'Loading model...'
-  if (s.engineState === 'starting') return 'Starting worker...'
-  if (s.engineState === 'stopping') return 'Stopping...'
   if (s.engineState === 'running') return `Listening${s.sampleRate ? ` (${s.sampleRate} Hz)` : ''}`
   return 'Stopped'
 })
 
 const toggleButtonLabel = computed(() => {
-  const e = status.value.engineState
-  if (e === 'preparing' || e === 'loading-model' || e === 'starting') return 'Starting...'
-  if (e === 'stopping') return 'Stopping...'
+  if (status.value.engineState === 'loading-model') return 'Starting...'
   return status.value.enabled ? 'Stop Whisper' : 'Start Whisper'
 })
 
@@ -591,23 +571,19 @@ async function commitAudioSettings() {
 
 async function applyModelDir() {
   modelDirError.value = ''
-  const file = modelPathDraft.value.trim()
-  if (!file) {
-    modelDirError.value = 'Enter a path to a .bin model file.'
-    return
-  }
-  const result = await updateSettings({ modelPath: file })
+  const file = modelDirDraft.value.trim()
+  const result = await updateSettings({ modelDir: file || null })
   if (!result?.success) {
     modelDirError.value = result?.error || 'File is not a valid Whisper ggml model'
   } else {
-    modelPathDraft.value = ''
+    modelDirDraft.value = ''
   }
 }
 
-async function clearModelPath() {
+async function useDefaultModelDir() {
   modelDirError.value = ''
-  modelPathDraft.value = ''
-  await updateSettings({ modelPath: null })
+  modelDirDraft.value = ''
+  await updateSettings({ modelDir: null })
 }
 
 function openModelList() {
@@ -1038,115 +1014,58 @@ onMounted(async () => {
 .whisper-commands-foot {
   margin-top: 12px;
 }
-
-/* Dark-theme overrides — keep page styles co-located with their
-   light-mode counterparts. Uses the same palette as `.card` +
-   AutoStatus preset cards (bg #2b2b2b / border #454545 / text #ecf0f1). */
-:global(body.dark-theme) .whisper-commands-head h3 {
-  color: #ecf0f1;
-}
-:global(body.dark-theme) .whisper-commands-head p,
-:global(body.dark-theme) .whisper-hint,
-:global(body.dark-theme) .whisper-hint-block {
-  color: #95a5a6;
-}
-:global(body.dark-theme) .whisper-field-text {
-  color: #ecf0f1;
-}
-:global(body.dark-theme) .whisper-model-path {
-  color: #95a5a6;
-}
-:global(body.dark-theme) .whisper-progress-label {
-  color: #95a5a6;
-}
-:global(body.dark-theme) .whisper-error-text,
-:global(body.dark-theme) .whisper-progress-error {
-  color: #ff6b5b;
-}
-:global(body.dark-theme) .whisper-empty {
-  color: #95a5a6;
-}
-:global(body.dark-theme) .whisper-partial {
-  background: rgba(255, 255, 255, 0.05);
-  color: #95a5a6;
-}
-:global(body.dark-theme) .whisper-partial.active {
-  background: rgba(46, 204, 113, 0.12);
-  color: #2ecc71;
-}
-:global(body.dark-theme) .whisper-transcript {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: #454545;
-}
-:global(body.dark-theme) .whisper-transcript-entry {
-  border-color: rgba(255, 255, 255, 0.06);
-}
-:global(body.dark-theme) .whisper-transcript-time {
-  color: #95a5a6;
-}
-:global(body.dark-theme) .whisper-transcript-text {
-  color: #ecf0f1;
-}
-:global(body.dark-theme) .whisper-meter {
-  background: rgba(255, 255, 255, 0.08);
-}
-:global(body.dark-theme) .whisper-meter-wrap > label {
-  color: #ecf0f1;
-}
-:global(body.dark-theme) .whisper-meter-caption {
-  color: #95a5a6;
-}
-:global(body.dark-theme) .whisper-meter-threshold {
-  background: rgba(255, 255, 255, 0.35);
-}
-:global(body.dark-theme) .whisper-progress {
-  background: rgba(255, 255, 255, 0.08);
-}
-:global(body.dark-theme) .whisper-command {
-  background: #2b2b2b;
-  border-color: #454545;
-}
-:global(body.dark-theme) .whisper-command.fired {
-  background: rgba(46, 204, 113, 0.12);
-  border-color: #2ecc71;
-}
-:global(body.dark-theme) .whisper-command.dirty {
-  border-color: #f1c40f;
-}
-:global(body.dark-theme) .whisper-command-name {
-  color: #ecf0f1;
-}
-:global(body.dark-theme) .whisper-command-category {
-  color: #5dade2;
-}
-:global(body.dark-theme) .whisper-fired-badge {
-  color: #58d68d;
-}
-:global(body.dark-theme) .whisper-dirty-badge {
-  color: #f4d03f;
-}
-:global(body.dark-theme) .whisper-inline-check {
-  color: #ecf0f1;
-}
-:global(body.dark-theme) .whisper-param-table th,
-:global(body.dark-theme) .whisper-param-table td {
-  border-color: #454545;
-}
-:global(body.dark-theme) .whisper-param-table th {
-  background: rgba(255, 255, 255, 0.04);
-  color: #ecf0f1;
-}
-:global(body.dark-theme) .whisper-dirty-bar {
-  background: rgba(241, 196, 15, 0.1);
-  color: #f4d03f;
-}
-:global(body.dark-theme) .whisper-confirm-bar {
-  background: rgba(231, 76, 60, 0.1);
-  color: #f1948a;
-}
-:global(body.dark-theme) .whisper-category-chip {
-  background: #2b2b2b;
-  border-color: #454545;
-  color: #ecf0f1;
-}
 </style>
+.whisper-commands-head h3 {
+  margin: 0;
+}
+.whisper-commands-head p {
+  margin: 0 0 12px;
+}
+.whisper-dirty-bar,
+.whisper-confirm-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.whisper-dirty-bar {
+  background: rgba(241, 196, 15, 0.12);
+  border: 1px solid rgba(241, 196, 15, 0.4);
+}
+.whisper-confirm-bar {
+  background: rgba(231, 76, 60, 0.12);
+  border: 1px solid rgba(231, 76, 60, 0.4);
+}
+.whisper-dirty-actions {
+  display: flex;
+  gap: 8px;
+}
+.whisper-categories-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.whisper-categories-filter,
+.whisper-categories-add {
+  margin: 0;
+}
+.whisper-new-category-row {
+  display: flex;
+  gap: 8px;
+}
+.whisper-new-category-row input {
+  flex: 1;
+}
+.whisper-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.whisper-category-chip {
+  display: inline-flex;
