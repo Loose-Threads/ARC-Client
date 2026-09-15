@@ -7,14 +7,23 @@ import { encryptData, decryptData } from './encryption'
 interface AppSettings {
   enableWebSocketForwarding: boolean
   hyperateAutostart: boolean
+  whisperAutostart: boolean
   oscleashAutostart: boolean
   ogbAutostart: boolean
   oscAutostart: boolean
   xsOverlayAutostart: boolean
+  // When true (default), ARC-Client sends autostatus telemetry
+  // to ARC-OSC. When false, snapshots are held in-process until
+  // the toggle is re-enabled.
+  telemetryEnabled: boolean
   theme: string
   lastUsername: string
   savedPassword: string
   snowEnabled: boolean
+  savedOpenShockToken: string
+  savedOpenShockSessionCookie: string
+  savedOpenShockPassword: string
+  openShockSessionUsername: string
   [key: string]: unknown
 }
 
@@ -31,6 +40,35 @@ interface HyperateConfig {
   trackers: string[]
   trackerNames: Record<string, string>
   trackerStates: Record<string, boolean>
+  [key: string]: unknown
+}
+
+export interface WhisperCommandParam {
+  address: string
+  type: 'f' | 'i' | 'bool' | 's'
+  value: string | number | boolean
+  reverseValue?: string | number | boolean | null
+}
+
+export interface WhisperCommand {
+  id: string
+  name: string
+  phrase: string
+  reversePhrase?: string
+  matchType: 'exact' | 'contains'
+  enabled: boolean
+  category?: string
+  parameters: WhisperCommandParam[]
+}
+
+export interface WhisperConfig {
+  modelPath: string | null
+  inputDeviceId: string | null
+  minInputLevel: number
+  inputGain: number
+  minUtteranceMs: number
+  categories: string[]
+  commands: WhisperCommand[]
   [key: string]: unknown
 }
 
@@ -106,6 +144,9 @@ interface XSOverlayConfig {
   notificationAudioPath: string
   [key: string]: unknown
 }
+interface OpenShockConfig {
+  [key: string]: unknown
+}
 interface AppConfig {
   legacyOscPort: number
   targetOscPort: number
@@ -118,11 +159,13 @@ interface AppConfig {
   oscQueryUnsubscriptions: string[]
   windowState: WindowState
   hyperate: HyperateConfig
+  whisper: WhisperConfig
   oscleash: OscLeashConfig
   vrchatapi: VRChatAPIConfig
   oscgoesbrrr: OscGoesbrrrConfig
   autostatus: AutoStatusConfig
   xsOverlay: XSOverlayConfig
+  openshock: OpenShockConfig
   configVersion: number
   [key: string]: unknown
 }
@@ -139,19 +182,25 @@ class ConfigManager {
       targetOscAddress: '127.0.0.1',
       oscQueryBindAddress: '0.0.0.0',
       additionalOscConnections: [],
-      websocketServerUrl: 'wss://avatar.comfychloe.uk:48255',
+      websocketServerUrl: 'wss://arcosc.app:48255',
       logLevel: 'info',
       appSettings: {
         enableWebSocketForwarding: false,
         hyperateAutostart: false,
+        whisperAutostart: false,
         oscleashAutostart: false,
         ogbAutostart: false,
         oscAutostart: false,
         xsOverlayAutostart: false,
+        telemetryEnabled: true,
         theme: 'light',
         lastUsername: '',
         savedPassword: '',
-        snowEnabled: false
+        snowEnabled: false,
+        savedOpenShockToken: '',
+        savedOpenShockSessionCookie: '',
+        savedOpenShockPassword: '',
+        openShockSessionUsername: ''
       },
       oscQueryUnsubscriptions: [],
       windowState: {
@@ -167,6 +216,16 @@ class ConfigManager {
         trackers: [],
         trackerNames: {},
         trackerStates: {}
+      },
+      // Whisper configuration
+      whisper: {
+        modelPath: null,
+        inputDeviceId: null,
+        minInputLevel: 0.02,
+        inputGain: 1.0,
+        minUtteranceMs: 600,
+        categories: [],
+        commands: []
       },
       // OSCLeash configuration
       oscleash: {
@@ -232,6 +291,8 @@ class ConfigManager {
         notificationVolume: 0.7,
         notificationAudioPath: 'default'
       },
+      // OpenShock configuration
+      openshock: {},
       // Version for future migration support
       configVersion: 1
     }
@@ -306,14 +367,20 @@ class ConfigManager {
       logLevel: this.config.logLevel || 'info',
       enableWebSocketForwarding: this.config.appSettings?.enableWebSocketForwarding || false,
       hyperateAutostart: this.config.appSettings?.hyperateAutostart || false,
+      whisperAutostart: this.config.appSettings?.whisperAutostart || false,
       oscleashAutostart: this.config.appSettings?.oscleashAutostart || false,
       ogbAutostart: this.config.appSettings?.ogbAutostart || false,
       oscAutostart: this.config.appSettings?.oscAutostart || false,
       xsOverlayAutostart: this.config.appSettings?.xsOverlayAutostart || false,
+      telemetryEnabled: this.config.appSettings?.telemetryEnabled ?? true,
       theme: this.config.appSettings?.theme || 'light',
       lastUsername: this.config.appSettings?.lastUsername || '',
       savedPassword: this.config.appSettings?.savedPassword || '',
-      snowEnabled: this.config.appSettings?.snowEnabled ?? false
+      snowEnabled: this.config.appSettings?.snowEnabled ?? false,
+      savedOpenShockToken: this.config.appSettings?.savedOpenShockToken || '',
+      savedOpenShockSessionCookie: this.config.appSettings?.savedOpenShockSessionCookie || '',
+      savedOpenShockPassword: this.config.appSettings?.savedOpenShockPassword || '',
+      openShockSessionUsername: this.config.appSettings?.openShockSessionUsername || ''
     }
   }
   updateAppSettings(settings: Partial<AppSettings> & { logLevel?: string }): boolean {
@@ -327,6 +394,9 @@ class ConfigManager {
     if (settings.hyperateAutostart !== undefined) {
       this.config.appSettings.hyperateAutostart = settings.hyperateAutostart
     }
+    if (settings.whisperAutostart !== undefined) {
+      this.config.appSettings.whisperAutostart = settings.whisperAutostart
+    }
     if (settings.oscleashAutostart !== undefined) {
       this.config.appSettings.oscleashAutostart = settings.oscleashAutostart
     }
@@ -338,6 +408,9 @@ class ConfigManager {
     }
     if (settings.xsOverlayAutostart !== undefined) {
       this.config.appSettings.xsOverlayAutostart = settings.xsOverlayAutostart
+    }
+    if (settings.telemetryEnabled !== undefined) {
+      this.config.appSettings.telemetryEnabled = settings.telemetryEnabled
     }
     if (settings.theme !== undefined) {
       this.config.appSettings.theme = settings.theme
@@ -410,6 +483,91 @@ class ConfigManager {
     debug.info('Saved password updated (encrypted) in configuration')
     return this.saveConfig()
   }
+  getSavedOpenShockToken(): string {
+    const encrypted = this.config.appSettings?.savedOpenShockToken || ''
+    if (!encrypted) return ''
+    const decrypted = decryptData(encrypted)
+    if (!decrypted) {
+      debug.warn('Failed to decrypt saved OpenShock token, clearing stored value')
+      this.setSavedOpenShockToken('')
+      return ''
+    }
+    return decrypted
+  }
+  setSavedOpenShockToken(token: string): boolean {
+    if (!this.config.appSettings) {
+      this.config.appSettings = {} as AppSettings
+    }
+    if (!token) {
+      this.config.appSettings.savedOpenShockToken = ''
+      debug.info('Saved OpenShock token cleared')
+      return this.saveConfig()
+    }
+    const encrypted = encryptData(token)
+    if (!encrypted) {
+      debug.error('Failed to encrypt OpenShock token')
+      return false
+    }
+    this.config.appSettings.savedOpenShockToken = encrypted
+    debug.info('Saved OpenShock token (encrypted)')
+    return this.saveConfig()
+  }
+  getSavedOpenShockSessionCookie(): string {
+    const encrypted = this.config.appSettings?.savedOpenShockSessionCookie || ''
+    if (!encrypted) return ''
+    const decrypted = decryptData(encrypted)
+    if (!decrypted) {
+      debug.warn('Failed to decrypt saved OpenShock session cookie, clearing stored value')
+      this.setSavedOpenShockSessionCookie('')
+      return ''
+    }
+    return decrypted
+  }
+  setSavedOpenShockSessionCookie(cookie: string): boolean {
+    if (!this.config.appSettings) { this.config.appSettings = {} as AppSettings }
+    if (!cookie) {
+      this.config.appSettings.savedOpenShockSessionCookie = ''
+      debug.info('Saved OpenShock session cookie cleared')
+      return this.saveConfig()
+    }
+    const encrypted = encryptData(cookie)
+    if (!encrypted) { debug.error('Failed to encrypt OpenShock session cookie'); return false }
+    this.config.appSettings.savedOpenShockSessionCookie = encrypted
+    debug.info('Saved OpenShock session cookie (encrypted)')
+    return this.saveConfig()
+  }
+  getSavedOpenShockPassword(): string {
+    const encrypted = this.config.appSettings?.savedOpenShockPassword || ''
+    if (!encrypted) return ''
+    const decrypted = decryptData(encrypted)
+    if (!decrypted) {
+      debug.warn('Failed to decrypt saved OpenShock password, clearing stored value')
+      this.setSavedOpenShockPassword('')
+      return ''
+    }
+    return decrypted
+  }
+  setSavedOpenShockPassword(password: string): boolean {
+    if (!this.config.appSettings) { this.config.appSettings = {} as AppSettings }
+    if (!password) {
+      this.config.appSettings.savedOpenShockPassword = ''
+      debug.info('Saved OpenShock password cleared')
+      return this.saveConfig()
+    }
+    const encrypted = encryptData(password)
+    if (!encrypted) { debug.error('Failed to encrypt OpenShock password'); return false }
+    this.config.appSettings.savedOpenShockPassword = encrypted
+    debug.info('Saved OpenShock password (encrypted)')
+    return this.saveConfig()
+  }
+  getOpenShockSessionUsername(): string {
+    return this.config.appSettings?.openShockSessionUsername || ''
+  }
+  setOpenShockSessionUsername(username: string): boolean {
+    if (!this.config.appSettings) { this.config.appSettings = {} as AppSettings }
+    this.config.appSettings.openShockSessionUsername = username
+    return this.saveConfig()
+  }
   getHyperateConfig(): HyperateConfig {
     if (!this.config.hyperate) {
       this.config.hyperate = {
@@ -430,6 +588,33 @@ class ConfigManager {
       ...hyperateConfig
     }
     debug.info('HypeRate config updated in configuration manager')
+    return this.saveConfig()
+  }
+  // Vosk removed — legacy vosk config keys in userdata/config.json are
+  // silently ignored (no getter/setter needed). They won't be re-saved and
+  // will fall off naturally on the next config write.
+  getWhisperConfig(): WhisperConfig {
+    const stored = (this.config.whisper || {}) as Partial<WhisperConfig>
+    this.config.whisper = {
+      modelPath: stored.modelPath ?? null,
+      inputDeviceId: stored.inputDeviceId ?? null,
+      minInputLevel: typeof stored.minInputLevel === 'number' ? stored.minInputLevel : 0,
+      inputGain: typeof stored.inputGain === 'number' ? stored.inputGain : 1,
+      minUtteranceMs: typeof stored.minUtteranceMs === 'number' ? stored.minUtteranceMs : 350,
+      categories: Array.isArray(stored.categories) ? stored.categories : [],
+      commands: Array.isArray(stored.commands) ? stored.commands : []
+    }
+    return { ...this.config.whisper }
+  }
+  updateWhisperConfig(whisperConfig: Partial<WhisperConfig>): boolean {
+    if (!this.config.whisper) {
+      this.config.whisper = {} as WhisperConfig
+    }
+    this.config.whisper = {
+      ...this.config.whisper,
+      ...whisperConfig
+    }
+    debug.info('Whisper config updated in configuration manager')
     return this.saveConfig()
   }
   getOSCLeashConfig(): OscLeashConfig {
