@@ -2,6 +2,9 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useAutoStatus, STATUS_TYPES, DAY_LABELS,  } from '../composables/useAutoStatus'
 import type { Preset, ScheduleEntry,  } from '../composables/useAutoStatus'
+import { useServerConnection } from '../composables/useServerConnection'
+import { useElectronAPI } from '../composables/useElectronAPI'
+import AvatarSyncBadge from '../components/AvatarSyncBadge.vue'
 
 const {
   presets,
@@ -21,6 +24,7 @@ const {
   
   updateSettings
 } = useAutoStatus()
+const { localAvatarId, confirmedAvatarId } = useServerConnection()
 
 const activePreset = computed(() => {
   if (!status.value.lastAppliedPresetId) return null
@@ -54,6 +58,30 @@ const confirmDeleteId = ref<number | null>(null)
 const editingScheduleId = ref<string | null>(null)
 const editingScheduleName = ref('')
 
+// Autostatus telemetry — gates whether ARC-Client batches and
+
+// runs in the background and queues events in arrival order, so
+// toggling on flushes the backlog; toggling off stops wire emits
+// while keeping the queue warm.
+const telemetryEnabled = ref(true)
+const telemetryBusy = ref(false)
+const autostatusApi = useElectronAPI()
+async function toggleTelemetry() {
+  if (telemetryBusy.value) return
+  telemetryBusy.value = true
+  try {
+    const next = !telemetryEnabled.value
+    telemetryEnabled.value = next
+    // setAppSettings IPC pushes the toggle to the main process
+    // websocketManager immediately (backlog drains in arrival order
+    // when transitioning OFF -> ON). No restart required.
+    const current = await autostatusApi.getAppSettings()
+    current.telemetryEnabled = next
+    await autostatusApi.setAppSettings(current)
+  } finally {
+    telemetryBusy.value = false
+  }
+}
 const isDarkTheme = ref(false)
 let themeObserver: MutationObserver | null = null
 
@@ -157,6 +185,14 @@ onMounted(() => {
   syncThemeState()
   themeObserver = new MutationObserver(syncThemeState)
   themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+  // Pull the persisted autostatus telemetry flag so the banner
+  // badge reflects the current state on mount.
+  ;(async () => {
+    try {
+      const settings = await autostatusApi.getAppSettings()
+      telemetryEnabled.value = settings?.telemetryEnabled ?? true
+    } catch { /* fall back to default-on */ }
+  })()
 })
 onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick)
@@ -186,6 +222,14 @@ onUnmounted(() => {
         <span v-if="status.avatarGuardActive" class="autostatus-badge autostatus-badge-warn">Avatar Guard</span>
         <span class="autostatus-badge" :class="status.vrchatApiAvailable ? 'autostatus-badge-ok' : 'autostatus-badge-err'">{{ status.vrchatApiAvailable ? 'API Ready' : 'API Offline' }}</span>
         <span class="autostatus-badge autostatus-badge-info">OSC: {{ status.lastOscValue ?? 0 }}</span>
+        <button
+          type="button"
+          class="autostatus-badge autostatus-badge-toggle"
+          :class="telemetryEnabled ? 'autostatus-badge-ok' : 'autostatus-badge-warn'"
+          :disabled="telemetryBusy"
+          :title="telemetryEnabled ? 'Click to stop sending join/leave events to ARC-OSC. Events keep collecting locally in arrival order; re-enabling sends the backlog.' : 'Click to start sending join/leave events to ARC-OSC. Any locally-queued backlog is sent first, in order.'"
+          @click="toggleTelemetry"
+        >Telemetry: {{ telemetryEnabled ? 'ON' : 'OFF' }}</button>
       </div>
     </div>
 
@@ -269,6 +313,7 @@ onUnmounted(() => {
         <span class="autostatus-section-hint">Automatically set status based on VRChat world, group, and instance type</span>
       </div>
 
+      <AvatarSyncBadge :local-avatar-id="localAvatarId" :confirmed-avatar-id="confirmedAvatarId" />
 
 
     </div>
@@ -499,6 +544,26 @@ onUnmounted(() => {
 .autostatus-badge-info {
   background: rgba(52, 152, 219, 0.2);
   color: #3498db;
+}
+/* Interactive variant of .autostatus-badge used for the autostatus
+   telemetry toggle. Looks like a badge at rest, hover reveals
+   clickability, :disabled prevents reentry while the IPC is
+   in-flight. */
+.autostatus-badge-toggle {
+  cursor: pointer;
+  border: none;
+  font-weight: 700;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.autostatus-badge-toggle:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+.autostatus-badge-toggle:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.autostatus-badge-toggle:disabled {
+  cursor: progress;
+  opacity: 0.6;
 }
 
 .autostatus-section {
