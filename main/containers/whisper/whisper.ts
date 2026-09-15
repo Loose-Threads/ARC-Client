@@ -12,7 +12,7 @@
 //     resamples to 16 kHz mono, and calls
 //     @kutalia/whisper-node-addon's transcribe({pcmf32}) on flush
 //   * Worker posts back {type:'result', text}, {type:'level', value},
-//     {type:'command-fired', ...}, {type:'status', state}, {type:'error'}
+//     {type:'status', state}, {type:'result', ...}, {type:'error'}
 //   * WhisperAddon translates worker events into the existing
 //     whisper-update / whisper-capture-control IPC channels so the
 //     renderer composable (useWhisper.ts) doesn't need to change.
@@ -113,7 +113,6 @@ interface WorkerCommandInit {
   type: 'init'
   modelPath: string
   language?: string
-  commands?: ReadonlyArray<WorkerCommandBase>
 }
 interface WorkerCommandConfigure {
   type: 'configure'
@@ -140,15 +139,6 @@ type WorkerCommand =
   | WorkerCommandPreflight
   | WorkerCommandShutdown
 
-interface WorkerCommandBase {
-  id: string
-  name: string
-  phrase: string
-  reversePhrase?: string | null
-  matchType: 'exact' | 'contains'
-  enabled: boolean
-}
-
 interface WorkerEventReady {
   type: 'ready'
   modelPath: string
@@ -168,12 +158,6 @@ interface WorkerEventResult {
   text: string
   confidence: number
 }
-interface WorkerEventCommandFired {
-  type: 'command-fired'
-  commandId: string
-  commandName: string
-  direction: 'forward' | 'reverse'
-}
 interface WorkerEventError {
   type: 'error'
   message: string
@@ -183,7 +167,6 @@ type WorkerEvent =
   | WorkerEventStatus
   | WorkerEventLevel
   | WorkerEventResult
-  | WorkerEventCommandFired
   | WorkerEventError
 
 // ── Model constants (Node owns the model download) ──────────────────
@@ -272,7 +255,6 @@ function isWorkerEvent(value: unknown): value is WorkerEvent {
     evt.type === 'status' ||
     evt.type === 'level' ||
     evt.type === 'result' ||
-    evt.type === 'command-fired' ||
     evt.type === 'error'
   )
 }
@@ -282,7 +264,7 @@ function isWorkerEvent(value: unknown): value is WorkerEvent {
 export class WhisperAddon {
   private worker: Worker | null = null
   private workerFile: string | null = null
-  private modelDir: string | null = null
+  private modelPath: string | null = null
   private oscService: OscServiceLike | null = null
   private engineState: WhisperEngineState = 'stopped'
   private modelState: WhisperModelState = 'missing'
@@ -290,6 +272,7 @@ export class WhisperAddon {
   private currentInputDeviceId: string | null = null
   private currentInputGain = 1.0
   private currentMinInputLevel = 0
+  private currentMinUtteranceMs = 350
   private isRunning = false
   private pendingInitResolve: ((ok: boolean) => void) | null = null
   // Monotonically incremented on every start(). The 'exit' handler
@@ -317,11 +300,52 @@ export class WhisperAddon {
 
   constructor() {
     const cfg = configManager.getWhisperConfig()
-    this.modelDir = cfg.modelDir ?? null
+    this.modelPath = cfg.modelPath ?? null
     this.currentInputDeviceId = cfg.inputDeviceId ?? null
     this.currentInputGain = cfg.inputGain ?? 1.0
     this.currentMinInputLevel = cfg.minInputLevel ?? 0
+    this.currentMinUtteranceMs = cfg.minUtteranceMs ?? 350
     this.workerFile = resolveWorkerFile()
+    // Re-derive modelState from the persisted modelPath so a model
+    // downloaded (or custom-applied) in a previous session is not
+    // reported as 'missing' on every fresh app start — which made the
+    // UI prompt a redownload even though the file was on disk.
+    this.refreshModelState()
+  }
+
+  // Validate the configured model file on disk and update modelState
+  // accordingly. Called from the constructor (persisted path from a
+  // previous session) and whenever the model path changes (download
+  // completion, custom model apply, clear).
+  private refreshModelState(): void {
+    if (!this.modelPath) {
+      this.modelState = 'missing'
+      return
+    }
+    if (!fs.existsSync(this.modelPath)) {
+      this.modelState = 'missing'
+      return
+    }
+    try {
+      const stat = fs.statSync(this.modelPath)
+      if (stat.size < MODEL_MIN_BYTES) {
+        this.modelState = 'invalid'
+        return
+      }
+      const fh = fs.openSync(this.modelPath, 'r')
+      try {
+        const buf = Buffer.alloc(4)
+        fs.readSync(fh, buf, 0, 4, 0)
+        const magic = buf.readUInt32LE(0)
+        this.modelState = magic === GGML_MAGIC ? 'ready' : 'invalid'
+      } finally {
+        fs.closeSync(fh)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      debug.warn(`[whisper] refreshModelState: failed to validate ${this.modelPath}: ${message}`)
+      this.modelState = 'invalid'
+    }
   }
 
   // ── Callback registration (mirrors old addon's interface) ──
@@ -525,7 +549,6 @@ export class WhisperAddon {
       debug.error(`[whisper] start: failed at loading-model — ${this.lastError}`)
       return false
     }
-    this.modelDir = path.dirname(modelPath)
 
     // ── Step 3: spawn worker thread ──
     // Bump the generation so any handler bound to a previous worker
@@ -617,21 +640,13 @@ export class WhisperAddon {
     // ── Step 5: send init, await 'ready' with 15s timeout ──
     const initOk = await new Promise<boolean>((resolve) => {
       this.pendingInitResolve = resolve
-      const commands: ReadonlyArray<WorkerCommandBase> = configManager
-        .getWhisperConfig()
-        .commands.map((c: WhisperCommand) => ({
-          id: c.id,
-          name: c.name,
-          phrase: c.phrase,
-          reversePhrase: c.reversePhrase ?? null,
-          matchType: c.matchType,
-          enabled: c.enabled
-        }))
+      // Commands are NOT sent to the worker — matching happens in main
+      // (see matchCommands) reading live config at fire time, so edits
+      // apply without an engine restart.
       this.sendWorker({
         type: 'init',
         modelPath,
-        language: 'en',
-        commands
+        language: 'en'
       })
       // Tightened from 60s → 15s: model load for tiny.en takes ~2-4s
       // on a warm disk; if the worker hasn't reported ready in 15s,
@@ -667,7 +682,7 @@ export class WhisperAddon {
     this.sendWorker({
       type: 'configure',
       minInputLevel: this.currentMinInputLevel,
-      minUtteranceMs: 350,
+      minUtteranceMs: this.currentMinUtteranceMs,
       maxUtteranceMs: 30_000
     })
 
@@ -792,7 +807,7 @@ export class WhisperAddon {
       enabled: this.isRunning,
       engineState: this.engineState,
       modelState: this.modelState,
-      modelPath: this.modelDir,
+      modelPath: this.modelPath,
       lastError: this.lastError,
       bridgePath: this.workerFile,
       inputDeviceId: this.currentInputDeviceId,
@@ -809,18 +824,40 @@ export class WhisperAddon {
     const ok = configManager.updateWhisperConfig(config)
     if (ok) {
       const cfg = configManager.getWhisperConfig()
-      this.modelDir = cfg.modelDir ?? null
+      const previousModelPath = this.modelPath
+      const previousGain = this.currentInputGain
+      const previousMinUtteranceMs = this.currentMinUtteranceMs
+      this.modelPath = cfg.modelPath ?? null
       this.currentInputDeviceId = cfg.inputDeviceId ?? null
       this.currentInputGain = cfg.inputGain ?? 1.0
       this.currentMinInputLevel = cfg.minInputLevel ?? 0
+      this.currentMinUtteranceMs = cfg.minUtteranceMs ?? 350
+      // When the model path changed (custom model applied or cleared),
+      // re-validate the file and push the new state immediately.
+      // Without this the UI kept showing the stale modelState until a
+      // restart, and the applied path was never verified.
+      if (previousModelPath !== this.modelPath) {
+        this.refreshModelState()
+        this.pushStatus()
+      }
       // Push the updated gate configuration to the running worker.
       if (this.isRunning) {
         this.sendWorker({
           type: 'configure',
           minInputLevel: this.currentMinInputLevel,
-          minUtteranceMs: 350,
+          minUtteranceMs: this.currentMinUtteranceMs,
           maxUtteranceMs: 30_000
         })
+        // Live-apply a changed input gain to the running AudioWorklet.
+        // The renderer's capture handler treats action 'update' with an
+        // explicit gain as a setGain (level events flow over the
+        // dedicated onWhisperLevel channel, so no feedback loop).
+        if (previousGain !== this.currentInputGain) {
+          this.onCaptureControl?.({
+            action: 'update',
+            gain: this.currentInputGain
+          })
+        }
       }
     }
     return ok
@@ -856,7 +893,7 @@ export class WhisperAddon {
   // ── Model download (Node-owned) ──
 
   async downloadModel(): Promise<{ success: boolean; error?: string; modelPath?: string }> {
-    const dest = this.modelDir ?? path.join(app.getPath('userData'), 'whisper-models')
+    const dest = path.join(app.getPath('userData'), 'whisper-models')
     try {
       await fsp.mkdir(dest, { recursive: true })
     } catch (err) {
@@ -864,7 +901,6 @@ export class WhisperAddon {
       return { success: false, error: `Failed to create model dir: ${message}` }
     }
     const modelPath = path.join(dest, MODEL_NAME)
-    this.modelDir = dest
     this.onDownloadProgress?.({ state: 'downloading', percent: 0, downloadedBytes: 0, totalBytes: 0 })
     try {
       await this.downloadFile(MODEL_URL, modelPath, (downloaded, total) => {
@@ -918,7 +954,8 @@ export class WhisperAddon {
       return { success: false, error: message }
     }
     this.modelState = 'ready'
-    configManager.updateWhisperConfig({ modelDir: dest })
+    this.modelPath = modelPath
+    configManager.updateWhisperConfig({ modelPath })
     this.onDownloadProgress?.({ state: 'ready', percent: 100, message: 'Model downloaded and verified' })
     this.pushStatus()
     return { success: true, modelPath }
@@ -1042,41 +1079,85 @@ export class WhisperAddon {
           text: evt.text,
           confidence: evt.confidence
         })
+        // Command matching lives in MAIN (not the worker) so the worker
+        // stays a pure whisper.cpp transcription shim. Matching reads the
+        // live config at fire time, so command edits apply immediately
+        // without restarting the engine.
+        this.matchCommands(evt.text)
         break
-      case 'command-fired': {
-        // Fire OSC for the matched command via oscService.
-        const cfg = configManager.getWhisperConfig()
-        const cmd = cfg.commands.find((c: WhisperCommand) => c.id === evt.commandId)
-        if (cmd && this.oscService) {
-          for (const p of cmd.parameters) {
-            const value =
-              evt.direction === 'reverse' && p.reverseValue !== undefined && p.reverseValue !== null
-                ? p.reverseValue
-                : p.value
-            try {
-              this.oscService.sendMessage(p.address, [{ type: p.type, value: value as number | string | boolean }])
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err)
-              debug.warn(`[whisper] OSC send failed for ${p.address}: ${message}`)
-            }
-          }
-        }
-        this.onResult?.({
-          isFinal: true,
-          text: '',
-          confidence: 1.0,
-          matchedCommandId: evt.commandId,
-          matchedCommandName: evt.commandName,
-          matchedDirection: evt.direction
-        })
-        break
-      }
       case 'error':
         this.lastError = evt.message
         debug.error(`[whisper] worker: ${this.lastError}`)
         this.pushStatus()
         break
     }
+  }
+
+  // ── Command matching + firing (main process) ─────────────────────
+
+  // Match the utterance against enabled commands and fire the first hit.
+  // Match order follows config order; forward phrase takes precedence over
+  // reverse phrase within a command (same semantics the worker had).
+  private matchCommands(text: string): void {
+    const commands = configManager.getWhisperConfig().commands
+    for (const cmd of commands) {
+      if (!cmd || !cmd.enabled) continue
+      if (cmd.phrase && WhisperAddon.textMatches(text, cmd.phrase, cmd.matchType)) {
+        this.fireCommand(cmd, 'forward')
+        return
+      }
+      if (cmd.reversePhrase && WhisperAddon.textMatches(text, cmd.reversePhrase, cmd.matchType)) {
+        this.fireCommand(cmd, 'reverse')
+        return
+      }
+    }
+  }
+
+  private static textMatches(text: string, phrase: string, matchType: 'exact' | 'contains'): boolean {
+    if (matchType === 'contains') {
+      return text.toLowerCase().indexOf(phrase.toLowerCase()) >= 0
+    }
+    return text.toLowerCase().trim() === phrase.toLowerCase()
+  }
+
+  // Fire a matched command: send each parameter via oscService, then notify
+  // the renderer so the transcript shows the command badge.
+  private fireCommand(cmd: WhisperCommand, direction: 'forward' | 'reverse'): void {
+    if (!this.oscService) return
+    for (const p of cmd.parameters) {
+      // Reverse resolution: explicit reverseValue wins; otherwise bool
+      // params AUTO-INVERT the forward value (the UI's "Auto (inverted)"
+      // option promises this and previously lied — main sent the same
+      // value on reverse). Non-bool params fall back to the forward value.
+      let value: string | number | boolean = p.value
+      if (direction === 'reverse') {
+        if (p.reverseValue !== undefined && p.reverseValue !== null) {
+          value = p.reverseValue
+        } else if (p.type === 'bool' && typeof p.value === 'boolean') {
+          value = !p.value
+        }
+      }
+      debug.info(
+        `[whisper] OSC → ${p.address} = ${JSON.stringify(value)} (${direction}) [cmd: ${cmd.name}]`
+      )
+      // Pass a fully-typed OSC arg list (matches the OscServiceLike
+      // interface). The concrete OscService.sendOscArgs sanitizes
+      // NaN/Infinity numeric values and maps bool args to T/F tags.
+      try {
+        this.oscService.sendOscArgs(p.address, [{ type: p.type, value: value as number | string | boolean }])
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        debug.warn(`[whisper] OSC send failed for ${p.address}: ${message}`)
+      }
+    }
+    this.onResult?.({
+      isFinal: true,
+      text: '',
+      confidence: 1.0,
+      matchedCommandId: cmd.id,
+      matchedCommandName: cmd.name,
+      matchedDirection: direction
+    })
   }
 
   private pushStatus(): void {
@@ -1090,7 +1171,7 @@ export class WhisperAddon {
       enabled: this.isRunning,
       engineState: this.engineState,
       modelState: this.modelState,
-      modelPath: this.modelDir,
+      modelPath: this.modelPath,
       lastError: this.lastError,
       message: this.lastError,
       inputDeviceId: this.currentInputDeviceId,
@@ -1100,13 +1181,9 @@ export class WhisperAddon {
   }
 
   private resolveModelPath(): string | null {
-    if (this.modelDir) {
-      const p = path.join(this.modelDir, MODEL_NAME)
-      if (fs.existsSync(p)) return p
-    }
-    const p = path.join(app.getPath('userData'), 'whisper-models', MODEL_NAME)
-    if (fs.existsSync(p)) return p
-    return null
+    if (!this.modelPath) return null
+    if (!fs.existsSync(this.modelPath)) return null
+    return this.modelPath
   }
 }
 

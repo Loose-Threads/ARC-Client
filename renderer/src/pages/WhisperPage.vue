@@ -62,13 +62,19 @@
         <label>Min input level: {{ minLevelDraft }}% <span class="whisper-hint">(Whisper only records above this level; 0 disables the gate)</span></label>
         <input type="range" min="0" max="100" step="1" v-model.number="minLevelDraft" @change="commitAudioSettings" />
       </div>
-      <div class="form-group whisper-slider-row">
-        <label>Input gain: {{ gainDraft }}%</label>
-        <input type="range" min="0" max="300" step="5" v-model.number="gainDraft" @change="commitAudioSettings" />
-      </div>
-      <div class="form-group whisper-slider-row">
-        <label>Min utterance: {{ minUtteranceDraft }} ms <span class="whisper-hint">(utterances shorter than this are dropped as noise blips; default 350 ms)</span></label>
-        <input type="range" min="0" max="2000" step="50" v-model.number="minUtteranceDraft" @change="commitAudioSettings" />
+      <button class="whisper-advanced-toggle" :class="{ expanded: advancedOpen }" type="button" @click="toggleAdvanced">
+        <span class="arrow">&#9656;</span>
+        <span>Advanced</span>
+      </button>
+      <div v-if="advancedOpen" class="whisper-advanced-section">
+        <div class="form-group whisper-slider-row">
+          <label>Input gain: {{ gainDraft }}% <span class="whisper-hint">(applied live to the mic signal)</span></label>
+          <input type="range" min="0" max="300" step="5" v-model.number="gainDraft" @change="commitAudioSettings" />
+        </div>
+        <div class="form-group whisper-slider-row">
+          <label>Min utterance: {{ minUtteranceDraft }} ms <span class="whisper-hint">(utterances shorter than this are dropped as noise blips; default 350 ms)</span></label>
+          <input type="range" min="0" max="2000" step="50" v-model.number="minUtteranceDraft" @change="commitAudioSettings" />
+        </div>
       </div>
     </div>
 
@@ -119,14 +125,6 @@
       <div class="whisper-commands-head">
         <div class="whisper-commands-head-row">
           <h3>Voice Commands</h3>
-          <button
-            class="btn"
-            :class="layoutEditMode ? 'btn-warning' : 'btn-secondary'"
-            @click="layoutEditMode = !layoutEditMode"
-            :title="layoutEditMode ? 'Disable editing - lock all command fields' : 'Enable editing - unlock command fields'"
-          >
-            {{ layoutEditMode ? 'Editing: ON' : 'Editing: OFF' }}
-          </button>
         </div>
         <p class="whisper-hint">Say the trigger phrase to fire all of a command's OSC parameters at once. Add a reverse phrase to send each parameter's reverse value.</p>
       </div>
@@ -147,37 +145,12 @@
         </div>
       </div>
 
-      <div class="whisper-categories">
-        <div class="whisper-categories-row">
-          <div class="form-group whisper-categories-filter">
-            <label>Filter</label>
-            <select :value="categoryFilter" @change="onFilterChange" :disabled="editDisabled">
-              <option v-for="opt in categoryFilterOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-          </div>
-          <div class="form-group whisper-categories-add">
-            <label>New category</label>
-            <div class="whisper-new-category-row">
-              <input type="text" v-model="newCategoryName" placeholder="Category name" :disabled="editDisabled" @keyup.enter="submitNewCategory" />
-              <button class="btn btn-secondary btn-small" :disabled="!newCategoryName.trim() || editDisabled" @click="submitNewCategory">Add</button>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="categories.length" class="whisper-category-chips">
-          <span v-for="cat in categories" :key="cat" class="whisper-category-chip">
-            {{ cat }}
-            <button v-if="!editDisabled" class="whisper-category-remove" :title="`Remove category ${cat}`" @click="onRemoveCategory(cat)">x</button>
-          </span>
-        </div>
-      </div>
-
       <div v-if="!hasCommands" class="whisper-empty">
         No commands yet. Click "Add Command" to create one.
       </div>
 
       <div
-        v-for="(command, index) in filteredCommands"
+        v-for="command in commands"
         :key="command.id"
         class="whisper-command"
         :class="{
@@ -188,41 +161,38 @@
         }"
       >
         <div class="whisper-command-head">
+          <button
+            class="whisper-collapse-toggle"
+            type="button"
+            :class="{ expanded: !isCollapsed(command.id) }"
+            :title="isCollapsed(command.id) ? 'Expand command' : 'Collapse command'"
+            @click="toggleCollapse(command.id)"
+          >
+            <span class="arrow">&#9656;</span>
+          </button>
           <div class="whisper-command-head-fields">
             <input
               type="text"
               v-model="command.name"
               class="whisper-command-name"
               placeholder="Command name"
-              :disabled="editDisabled"
               @input="fireInput(command.id)"
             />
             <div class="whisper-command-meta">
-              <span v-if="command.category" class="whisper-command-category">{{ command.category }}</span>
               <span v-if="firedRecently(command)" class="whisper-fired-badge">Fired ({{ firedRecently(command) }})</span>
               <span v-if="isDirty(command.id)" class="whisper-dirty-badge">{{ isSaving(command.id) ? 'Saving...' : 'Unsaved' }}</span>
             </div>
           </div>
           <label class="whisper-inline-check">
-            <input type="checkbox" v-model="command.enabled" :disabled="editDisabled" @change="fireInput(command.id)" /> Enabled
+            <input type="checkbox" v-model="command.enabled" @change="fireInput(command.id)" /> Enabled
           </label>
-          <select v-model="command.matchType" class="whisper-match-select" :disabled="editDisabled" @change="fireInput(command.id)">
+          <select v-model="command.matchType" class="whisper-match-select" @change="fireInput(command.id)">
             <option value="contains">Contains</option>
             <option value="exact">Exact</option>
           </select>
-          <select
-            class="whisper-category-select"
-            :value="command.category || ''"
-            :disabled="editDisabled"
-            @change="onCategorySelect(command.id, $event)"
-            title="Category"
-          >
-            <option value="">Uncategorized</option>
-            <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
-          </select>
           <div class="whisper-command-actions">
             <button v-if="isDirty(command.id)" class="btn btn-primary btn-small" :disabled="isSaving(command.id)" @click="saveBlock(command.id)">{{ isSaving(command.id) ? 'Saving...' : 'Save' }}</button>
-            <button class="btn btn-secondary btn-small" :disabled="editDisabled" @click="removeCommand(command)" title="Delete this command">Delete</button>
+            <button class="btn btn-secondary btn-small" @click="removeCommand(command)" title="Delete this command">Delete</button>
           </div>
         </div>
 
@@ -230,11 +200,11 @@
           <div class="whisper-command-fields">
             <div class="form-group">
               <label>Trigger phrase</label>
-              <input type="text" v-model="command.phrase" placeholder="e.g. lights on" :disabled="editDisabled" @input="fireInput(command.id)" />
+              <input type="text" v-model="command.phrase" placeholder="e.g. lights on" @input="fireInput(command.id)" />
             </div>
             <div class="form-group">
               <label>Reverse phrase <span class="whisper-hint">(optional - sends reverse values)</span></label>
-              <input type="text" v-model="command.reversePhrase" placeholder="e.g. lights off" :disabled="editDisabled" @input="fireInput(command.id)" />
+              <input type="text" v-model="command.reversePhrase" placeholder="e.g. lights off" @input="fireInput(command.id)" />
             </div>
           </div>
           <div class="whisper-field">
@@ -250,10 +220,10 @@
               <tbody>
                 <tr v-for="(param, paramIndex) in command.parameters" :key="paramIndex">
                   <td>
-                    <input type="text" v-model="param.address" placeholder="/avatar/parameters/..." :disabled="editDisabled" @input="fireInput(command.id)" />
+                    <input type="text" v-model="param.address" placeholder="/avatar/parameters/..." @input="fireInput(command.id)" />
                   </td>
                   <td>
-                    <select :value="param.type" :disabled="editDisabled" @change="onParamTypeChange(command.id, paramIndex, ($event.target as HTMLSelectElement).value as WhisperCommandParam['type'])">
+                    <select :value="param.type" @change="onParamTypeChange(command.id, paramIndex, ($event.target as HTMLSelectElement).value as WhisperCommandParam['type'])">
                       <option value="f">Float</option>
                       <option value="i">Int</option>
                       <option value="bool">Bool</option>
@@ -264,391 +234,105 @@
                     <select
                       v-if="param.type === 'bool'"
                       :value="param.value ? 'true' : 'false'"
-                      :disabled="editDisabled"
                       @change="onBoolValueChange(command.id, paramIndex, ($event.target as HTMLSelectElement).value === 'true')"
                     >
                       <option value="true">True</option>
                       <option value="false">False</option>
                     </select>
-                    <input v-else type="text" v-model="param.value" placeholder="1" :disabled="editDisabled" @input="fireInput(command.id)" />
+                    <input v-else type="text" v-model="param.value" placeholder="1" @input="fireInput(command.id)" />
                   </td>
                   <td>
                     <select
                       v-if="param.type === 'bool'"
                       :value="reverseBoolDisplay(param)"
-                      :disabled="editDisabled"
                       @change="setReverseBool(command.id, paramIndex, ($event.target as HTMLSelectElement).value)"
                     >
                       <option value="">Auto (inverted)</option>
                       <option value="true">True</option>
                       <option value="false">False</option>
                     </select>
-                    <input v-else type="text" v-model="param.reverseValue" placeholder="(optional)" :disabled="editDisabled" @input="fireInput(command.id)" />
+                    <input v-else type="text" v-model="param.reverseValue" placeholder="(optional)" @input="fireInput(command.id)" />
                   </td>
                 </tr>
               </tbody>
             </table>
             <div class="whisper-add-param-row">
-              <button class="btn btn-secondary btn-small" :disabled="editDisabled" @click="addParam(command)">+ Add Parameter</button>
+              <button class="btn btn-secondary btn-small" @click="addParam(command)">+ Add Parameter</button>
             </div>
           </div>
         </div>
       </div>
 
       <div class="whisper-commands-foot">
-        <button class="btn btn-primary" :disabled="editDisabled" @click="addCommand">+ Add Command</button>
+        <button class="btn btn-primary" @click="addCommand">+ Add Command</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useWhisper, type WhisperCommand, type WhisperCommandParam, type WhisperPreflightResult } from '../composables/useWhisper'
-import { useElectronAPI } from '../composables/useElectronAPI'
-
-const api = useElectronAPI()
+// Logic lives in the sibling WhisperPage.ts factory — keep this block thin.
+import type { WhisperCommandParam } from '../composables/useWhisper'
+import { createWhisperPageState } from './WhisperPage'
 const {
   status,
   commands,
-  categories,
   autostart,
   transcript,
   inputLevel,
   gateOpen,
   downloadProgress,
   devices,
-  lastFired,
-  collapsedIds,
   lastSavedAt,
-  refresh,
   refreshStatus,
-  preflight,
-  toggle,
-  setAutostart,
   downloadModel,
-  setInputDevice,
-  updateSettings,
-  saveCommands,
-  saveCommand,
-  saveAllDirty,
-  discardAllDirty,
   toggleCollapse,
-  addCategory,
-  removeCategory,
-  setCommandCategory,
-  fireInput,
   isDirty,
   isSaving,
-  clearTranscript
-} = useWhisper()
-
-const busy = ref(false)
-const preflightResult = ref<WhisperPreflightResult | null>(null)
-const layoutEditMode = ref(true)
-const showDiscardConfirm = ref(false)
-const minLevelDraft = ref(0)
-const gainDraft = ref(100)
-const minUtteranceDraft = ref(350)
-const modelDirDraft = ref('')
-const modelDirError = ref('')
-const modelPathDraft = ref('')
-const newCategoryName = ref('')
-const categoryFilter = ref<string>('__all__')
-
-watch(status, (s) => {
-  minLevelDraft.value = s.minInputLevel
-  gainDraft.value = Math.round(s.inputGain * 100)
-  minUtteranceDraft.value = s.minUtteranceMs
-}, { immediate: true })
-
-const anyDirty = computed(() => commands.value.some(c => isDirty(c.id)))
-const dirtyCount = computed(() => commands.value.filter(c => isDirty(c.id)).length)
-
-const statusClass = computed(() => {
-  const s = status.value
-  if (s.engineState === 'error') return 'status-error'
-  if (s.engineState === 'running') return 'status-connected'
-  // preparing / loading-model / starting all show the "busy" indicator
-  if (s.engineState === 'preparing' || s.engineState === 'loading-model' || s.engineState === 'starting') {
-    return 'status-connecting'
-  }
-  return 'status-disconnected'
-})
-
-const isStartingOrPreparing = computed(() => {
-  const e = status.value.engineState
-  return e === 'preparing' || e === 'loading-model' || e === 'starting'
-})
-
-const statusText = computed(() => {
-  const s = status.value
-  if (s.engineState === 'error') return `Error: ${s.lastError || 'Unknown error'}`
-  if (s.engineState === 'preparing') return 'Preparing engine...'
-  if (s.engineState === 'loading-model') return 'Loading model...'
-  if (s.engineState === 'starting') return 'Starting worker...'
-  if (s.engineState === 'stopping') return 'Stopping...'
-  if (s.engineState === 'running') return `Listening${s.sampleRate ? ` (${s.sampleRate} Hz)` : ''}`
-  return 'Stopped'
-})
-
-const toggleButtonLabel = computed(() => {
-  const e = status.value.engineState
-  if (e === 'preparing' || e === 'loading-model' || e === 'starting') return 'Starting...'
-  if (e === 'stopping') return 'Stopping...'
-  return status.value.enabled ? 'Stop Whisper' : 'Start Whisper'
-})
-
-const modelStateText = computed(() => {
-  switch (status.value.modelState) {
-    case 'ready': return 'Model ready'
-    case 'missing': return 'No model installed'
-    case 'invalid': return 'Model file invalid (missing ggml magic or below 50 MB)'
-    case 'downloading': return 'Downloading model...'
-    case 'extracting': return 'Extracting model...'
-    default: return status.value.modelState
-  }
-})
-
-const downloading = computed(() =>
-  downloadProgress.value?.state === 'downloading' || downloadProgress.value?.state === 'extracting'
-)
-
-const downloadLabel = computed(() => {
-  const progress = downloadProgress.value
-  if (!progress) return ''
-  if (progress.state === 'extracting') return 'Extracting...'
-  if (progress.state === 'downloading') {
-    const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
-    return progress.totalBytes > 0
-      ? `Downloading ${mb(progress.downloadedBytes)} / ${mb(progress.totalBytes)} MB`
-      : 'Downloading...'
-  }
-  if (progress.state === 'error') return `Download failed: ${progress.error || 'unknown error'}`
-  return ''
-})
-
-const filteredCommands = computed<WhisperCommand[]>(() => {
-  const filter = categoryFilter.value
-  if (filter === '__all__') return commands.value
-  if (filter === '__uncategorized__') return commands.value.filter(c => !c.category)
-  return commands.value.filter(c => c.category === filter)
-})
-
-const categoryFilterOptions = computed(() => [
-  { value: '__all__', label: 'All' },
-  { value: '__uncategorized__', label: 'Uncategorized' },
-  ...categories.value.map(c => ({ value: c, label: c }))
-])
-
-const hasCommands = computed(() => commands.value.length > 0)
-const editDisabled = computed(() => !layoutEditMode.value)
-
-function isCollapsed(commandId: string): boolean {
-  return collapsedIds.value.has(commandId)
-}
-
-function firedRecently(command: WhisperCommand): 'forward' | 'reverse' | null {
-  const fired = lastFired.value
-  if (!fired || fired.name !== command.name) return null
-  if (Date.now() - fired.at > 5000) return null
-  return fired.direction
-}
-
-function timeLabel(at: number): string {
-  return new Date(at).toLocaleTimeString()
-}
-
-function newParam(): WhisperCommandParam {
-  return { address: '/avatar/parameters/', type: 'f', value: '1', reverseValue: null }
-}
-
-function newCommand(): WhisperCommand {
-  return {
-    id: crypto.randomUUID(),
-    name: `Command ${commands.value.length + 1}`,
-    phrase: '',
-    reversePhrase: '',
-    matchType: 'contains',
-    enabled: true,
-    category: categoryFilter.value !== '__all__' && categoryFilter.value !== '__uncategorized__'
-      ? categoryFilter.value
-      : undefined,
-    parameters: [newParam()]
-  }
-}
-
-async function addCommand() {
-  if (editDisabled.value) return
-  try {
-    await saveCommands([...commands.value, newCommand()])
-  } catch (err) {
-    console.error('Failed to add command', err)
-  }
-}
-
-async function removeCommand(command: WhisperCommand) {
-  if (editDisabled.value) return
-  try {
-    await saveCommands(commands.value.filter(c => c.id !== command.id))
-  } catch (err) {
-    console.error('Failed to remove command', err)
-  }
-}
-
-async function addParam(command: WhisperCommand) {
-  if (editDisabled.value) return
-  command.parameters.push(newParam())
-  try {
-    await saveCommand(command.id)
-  } catch (err) {
-    console.error('Failed to add parameter', err)
-  }
-}
-
-function setReverseBool(commandId: string, paramIndex: number, raw: string) {
-  if (editDisabled.value) return
-  const command = commands.value.find(c => c.id === commandId)
-  if (!command) return
-  const param = command.parameters[paramIndex]
-  if (!param) return
-  if (raw === '') param.reverseValue = null
-  else if (raw === 'true') param.reverseValue = true
-  else if (raw === 'false') param.reverseValue = false
-  else param.reverseValue = undefined
-  fireInput(commandId)
-}
-
-function onBoolValueChange(commandId: string, paramIndex: number, value: boolean) {
-  if (editDisabled.value) return
-  const command = commands.value.find(c => c.id === commandId)
-  if (!command) return
-  const param = command.parameters[paramIndex]
-  if (!param) return
-  param.value = value
-  fireInput(commandId)
-}
-
-function onParamTypeChange(commandId: string, paramIndex: number, newType: WhisperCommandParam['type']) {
-  if (editDisabled.value) return
-  const command = commands.value.find(c => c.id === commandId)
-  if (!command) return
-  const param = command.parameters[paramIndex]
-  if (!param) return
-  param.type = newType
-  if (newType === 'bool') {
-    if (typeof param.value !== 'boolean') param.value = false
-    if (param.reverseValue !== null && param.reverseValue !== undefined && typeof param.reverseValue !== 'boolean') {
-      param.reverseValue = null
-    }
-  } else if (typeof param.value === 'boolean') {
-    param.value = newType === 's' ? '' : 0
-  }
-  fireInput(commandId)
-}
-
-function reverseBoolDisplay(param: WhisperCommandParam): string {
-  if (param.type !== 'bool') return ''
-  if (param.reverseValue === undefined || param.reverseValue === null) return ''
-  return param.reverseValue ? 'true' : 'false'
-}
-
-async function discardDirty() {
-  showDiscardConfirm.value = false
-  await discardAllDirty()
-}
-
-async function saveAllDirtyBlocks() {
-  await saveAllDirty()
-}
-
-async function handleToggle() {
-  if (busy.value) return
-  busy.value = true
-  try {
-    await toggle()
-  } finally {
-    busy.value = false
-  }
-}
-
-async function handleToggleAutostart() {
-  await setAutostart(!autostart.value)
-}
-
-async function handleDeviceChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
-  await setInputDevice(value || null)
-}
-
-async function commitAudioSettings() {
-  await updateSettings({
-    minInputLevel: minLevelDraft.value,
-    inputGain: gainDraft.value / 100,
-    minUtteranceMs: minUtteranceDraft.value
-  })
-}
-
-async function applyModelDir() {
-  modelDirError.value = ''
-  const file = modelPathDraft.value.trim()
-  if (!file) {
-    modelDirError.value = 'Enter a path to a .bin model file.'
-    return
-  }
-  const result = await updateSettings({ modelPath: file })
-  if (!result?.success) {
-    modelDirError.value = result?.error || 'File is not a valid Whisper ggml model'
-  } else {
-    modelPathDraft.value = ''
-  }
-}
-
-async function clearModelPath() {
-  modelDirError.value = ''
-  modelPathDraft.value = ''
-  await updateSettings({ modelPath: null })
-}
-
-function openModelList() {
-  void api.openExternal(status.value.modelListUrl)
-}
-
-async function submitNewCategory() {
-  const name = newCategoryName.value.trim()
-  if (!name) return
-  if (await addCategory(name)) {
-    newCategoryName.value = ''
-  }
-}
-
-function onCategorySelect(commandId: string, event: Event) {
-  if (editDisabled.value) return
-  const value = (event.target as HTMLSelectElement).value
-  setCommandCategory(commandId, value === '' ? undefined : value)
-}
-
-function onFilterChange(event: Event) {
-  categoryFilter.value = (event.target as HTMLSelectElement).value
-}
-
-function onRemoveCategory(name: string) {
-  if (editDisabled.value) return
-  if (commands.value.some(c => c.category === name)) {
-    if (!confirm(`Remove category "${name}"? Commands in this category will become Uncategorized.`)) return
-  }
-  void removeCategory(name)
-}
-
-onMounted(async () => {
-  try {
-    preflightResult.value = await preflight()
-  } catch {
-    preflightResult.value = { ok: false, bundledLibsOk: false, dllPath: null, lastError: 'Preflight IPC failed' }
-  }
-  await refresh()
-  void refreshStatus()
-})
+  clearTranscript,
+  fireInput,
+  saveBlock,
+  busy,
+  preflightResult,
+  showDiscardConfirm,
+  minLevelDraft,
+  gainDraft,
+  minUtteranceDraft,
+  modelDirDraft,
+  modelDirError,
+  modelPathDraft,
+  advancedOpen,
+  anyDirty,
+  dirtyCount,
+  statusClass,
+  isStartingOrPreparing,
+  statusText,
+  toggleButtonLabel,
+  modelStateText,
+  downloading,
+  downloadLabel,
+  hasCommands,
+  isCollapsed,
+  toggleAdvanced,
+  firedRecently,
+  timeLabel,
+  reverseBoolDisplay,
+  addCommand,
+  removeCommand,
+  addParam,
+  setReverseBool,
+  onBoolValueChange,
+  onParamTypeChange,
+  discardDirty,
+  saveAllDirtyBlocks,
+  handleToggle,
+  handleToggleAutostart,
+  handleDeviceChange,
+  commitAudioSettings,
+  applyModelDir,
+  clearModelPath,
+  openModelList
+} = createWhisperPageState()
 </script>
 
 <style scoped>
@@ -893,47 +577,6 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
 }
-.whisper-categories-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-.whisper-categories-filter,
-.whisper-categories-add {
-  margin: 0;
-}
-.whisper-new-category-row {
-  display: flex;
-  gap: 8px;
-}
-.whisper-new-category-row input {
-  flex: 1;
-}
-.whisper-category-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.whisper-category-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: rgba(127, 127, 127, 0.15);
-  font-size: 12px;
-}
-.whisper-category-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-  padding: 0;
-  font-size: 14px;
-  line-height: 1;
-}
 .whisper-command {
   border: 1px solid rgba(127, 127, 127, 0.2);
   border-radius: 6px;
@@ -993,18 +636,81 @@ onMounted(async () => {
 .whisper-command-head .whisper-command-name {
   width: 100%;
 }
-.whisper-command-head .whisper-match-select,
-.whisper-command-head .whisper-category-select {
+.whisper-command-head .whisper-match-select {
   width: auto;
   min-width: 110px;
+}
+/* Collapse/expand chevron on each command card — mirrors the sidebar
+   Modules tree-toggle (App.vue) so the interaction feels consistent. */
+.whisper-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 100ms linear, transform 100ms linear;
+}
+.whisper-collapse-toggle:hover {
+  opacity: 1;
+}
+.whisper-collapse-toggle .arrow {
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 100ms linear;
+}
+.whisper-collapse-toggle:not(.expanded) .arrow {
+  transform: rotate(0deg);
+}
+/* Advanced settings section under the Audio Input card — same chevron
+   language as the command collapse toggles. */
+.whisper-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 100ms linear;
+}
+.whisper-advanced-toggle:hover {
+  opacity: 1;
+}
+.whisper-advanced-toggle .arrow {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 100ms linear;
+}
+.whisper-advanced-toggle:not(.expanded) .arrow {
+  transform: rotate(0deg);
+}
+.whisper-advanced-section {
+  border-left: 2px solid rgba(127, 127, 127, 0.25);
+  padding-left: 12px;
+  margin: 6px 0 4px 4px;
 }
 .whisper-command-meta {
   display: flex;
   gap: 6px;
   font-size: 11px;
-}
-.whisper-command-category {
-  color: #3498db;
 }
 .whisper-fired-badge {
   color: #2ecc71;
@@ -1020,8 +726,7 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
 }
-.whisper-match-select,
-.whisper-category-select {
+.whisper-match-select {
   font-size: 12px;
   padding: 2px 6px;
 }
@@ -1159,8 +864,8 @@ onMounted(async () => {
 :global(body.dark-theme .whisper-command-name) {
   color: #ecf0f1;
 }
-:global(body.dark-theme .whisper-command-category) {
-  color: #5dade2;
+:global(body.dark-theme .whisper-collapse-toggle) {
+  color: #ecf0f1;
 }
 :global(body.dark-theme .whisper-fired-badge) {
   color: #58d68d;
@@ -1201,10 +906,5 @@ onMounted(async () => {
 :global(body.dark-theme .whisper-confirm-bar) {
   background: rgba(231, 76, 60, 0.1);
   color: #f1948a;
-}
-:global(body.dark-theme .whisper-category-chip) {
-  background: #2b2b2b;
-  border-color: #454545;
-  color: #ecf0f1;
 }
 </style>

@@ -15,7 +15,7 @@
 //     via transferable ArrayBuffer (zero-copy).
 //
 // Protocol (mirrors the Vosk-era worker pattern):
-//   main -> worker: {type:'init', modelPath, language, commands}
+//   main -> worker: {type:'init', modelPath, language}
 //                  {type:'waveform', chunk, sampleRate, level}  (transferable)
 //                  {type:'preflight'}
 //                  {type:'shutdown'}
@@ -23,8 +23,12 @@
 //                  {type:'status', state, message}
 //                  {type:'level', value}
 //                  {type:'result', text, confidence}
-//                  {type:'command-fired', commandId, commandName, direction}
 //                  {type:'error', message}
+//
+// NOTE: command matching is NOT done here. The worker is a pure
+// whisper.cpp transcription shim — main process owns matching + OSC
+// firing (see WhisperAddon.matchCommands/fireCommand in whisper.ts),
+// reading the live config so command edits apply without a restart.
 // =====================================================================
 
 'use strict';
@@ -47,7 +51,6 @@ if (!parentPort) {
 let transcribe = null;
 let modelPath = null;
 let language = 'en';
-let commands = [];
 
 function loadBinding() {
   if (transcribe !== null) return transcribe;
@@ -77,7 +80,12 @@ function loadBinding() {
 // gate; below threshold for >GATE_HOLD_MS -> flush. The min-utterance
 // check drops noise blips; the max-utterance cap forces a flush on
 // long monologues so the user gets incremental transcriptions.
-const GATE_HOLD_MS = 500;
+// GATE_HOLD_MS is how long the gate stays open after the level drops
+// below the threshold before the utterance is flushed. 500ms clipped
+// the tails of words spoken with trailing-off volume ("okayyy",
+// sentence-final words); 800ms gives natural speech room to land
+// without a noticeably laggy flush.
+const GATE_HOLD_MS = 800;
 const DEFAULT_MIN_UTTERANCE_MS = 350;
 const DEFAULT_MAX_UTTERANCE_MS = 30000;
 const WHISPER_SAMPLE_RATE = 16000;
@@ -224,61 +232,55 @@ async function runInference(int16Pcm) {
       model: modelPath,
       language,
       no_prints: true,
+      no_timestamps: true,
       translate: false
     });
     const transcription = result && result.transcription;
     if (!transcription) return;
 
     // The shim returns string[][] (one entry per segment) or string[].
-    // Normalize to a single string per utterance.
+    // Each inner entry may itself be [fromMs, toMs, text] or already a plain
+    // string. Only the trailing text member is spoken content — joining the
+    // whole array leaks whisper.cpp timestamp tokens (e.g. "00:00:02.480
+    // 00:00:05.720") into the transcript, so take the LAST string member of
+    // each segment and strip any residual timestamp prefixes as a fallback.
     let text = '';
     if (Array.isArray(transcription)) {
       text = transcription
-        .map((segment) => (Array.isArray(segment) ? segment.join(' ') : String(segment)))
+        .map((segment) => {
+          if (Array.isArray(segment)) {
+            const stringMembers = segment.filter((m) => typeof m === 'string');
+            return stringMembers.length > 0 ? stringMembers[stringMembers.length - 1] : '';
+          }
+          return String(segment);
+        })
         .join(' ')
         .trim();
     } else {
       text = String(transcription).trim();
     }
     if (!text) return;
+    text = stripTimestamps(text);
+    if (!text) return;
 
     post({ type: 'result', text, confidence: 1.0 });
-    matchCommand(text);
   } catch (err) {
     postError('transcribe() failed', err);
   }
 }
 
-function matchCommand(text) {
-  for (const cmd of commands) {
-    if (!cmd || !cmd.enabled) continue;
-    if (cmd.phrase && textMatches(text, cmd.phrase, cmd.matchType)) {
-      post({
-        type: 'command-fired',
-        commandId: cmd.id,
-        commandName: cmd.name,
-        direction: 'forward'
-      });
-      return;
-    }
-    if (cmd.reversePhrase && textMatches(text, cmd.reversePhrase, cmd.matchType)) {
-      post({
-        type: 'command-fired',
-        commandId: cmd.id,
-        commandName: cmd.name,
-        direction: 'reverse'
-      });
-      return;
-    }
-  }
-}
+// ── Transcription text cleanup ──────────────────────────────────────
 
-function textMatches(text, phrase, matchType) {
-  if (!phrase) return false;
-  if (matchType === 'contains') {
-    return text.toLowerCase().indexOf(phrase.toLowerCase()) >= 0;
-  }
-  return text.toLowerCase().trim() === phrase.toLowerCase();
+// Strips residual whisper.cpp timestamp tokens from transcript text.
+// Handles forms like "00:00:02.480", "[00:00:02.480 --> 00:00:05.720]",
+// "00:00:02.480  00:00:05.720" (start/end pairs) and bracketed singles.
+// Applied as a safety net after structural segment parsing above.
+const TIMESTAMP_PAIR_RE = /\[?\d{1,2}:\d{2}:\d{2}\.\d{1,3}\]?\s*--\s*>?\s*\[?\d{1,2}:\d{2}:\d{2}\.\d{1,3}\]?/g;
+const TIMESTAMP_SINGLE_RE = /\[?\d{1,2}:\d{2}:\d{2}\.\d{1,3}\]?/g;
+function stripTimestamps(text) {
+  let cleaned = text.replace(TIMESTAMP_PAIR_RE, ' ');
+  cleaned = cleaned.replace(TIMESTAMP_SINGLE_RE, ' ');
+  return cleaned.replace(/\s{2,}/g, ' ').trim();
 }
 
 // ── Message dispatch ────────────────────────────────────────────────
@@ -293,7 +295,6 @@ parentPort.on('message', (msg) => {
         }
         modelPath = msg.modelPath;
         language = typeof msg.language === 'string' ? msg.language : 'en';
-        commands = Array.isArray(msg.commands) ? msg.commands : [];
         postStatus('ready', `model=${path.basename(modelPath)}`);
         post({ type: 'ready', modelPath, sampleRate: WHISPER_SAMPLE_RATE });
         return;
