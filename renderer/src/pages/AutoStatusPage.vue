@@ -1,136 +1,46 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useAutoStatus, STATUS_TYPES, DAY_LABELS } from '../composables/useAutoStatus'
-import type { Preset, ScheduleEntry } from '../composables/useAutoStatus'
-
+// Logic lives in the sibling AutoStatusPage.ts factory — keep this block thin.
+import { createAutoStatusPageState } from './AutoStatusPage'
 const {
   presets,
   schedule,
   settings,
   status,
+  localAvatarId,
+  confirmedAvatarId,
   createPreset,
   updatePreset,
-  deletePreset,
   testPreset,
-  addSchedule,
-  updateSchedule,
   deleteSchedule,
-  updateSettings
-} = useAutoStatus()
-
-const activePreset = computed(() => {
-  if (!status.value.lastAppliedPresetId) return null
-  return presets.value.find((preset) => preset.id === status.value.lastAppliedPresetId) ?? null
-})
-
-const currentStatusType = computed(() => {
-  return STATUS_TYPES.find((type) => type.value === status.value.currentStatus) ?? null
-})
-
-const bannerTitle = computed(() => {
-  return activePreset.value?.name ?? currentStatusType.value?.label ?? 'No Active Preset'
-})
-
-const bannerSubtitle = computed(() => {
-  if (status.value.currentStatusDescription) return status.value.currentStatusDescription
-  if (currentStatusType.value) return currentStatusType.value.label
-  return 'Waiting for trigger...'
-})
-
-const newSchedule = ref({
-  name: '',
-  startTime: '09:00',
-  endTime: '17:00',
-  presetId: 0,
-  fallbackStatusType: ''
-})
-
-const newDays = ref<Set<number>>(new Set())
-const confirmDeleteId = ref<number | null>(null)
-const editingScheduleId = ref<string | null>(null)
-const editingScheduleName = ref('')
-
-function onPresetFieldChange(preset: Preset, field: keyof Preset, value: string | null) {
-  const updated = {
-    ...preset,
-    [field]: field === 'statusType' && value === '' ? null : value
-  }
-  void updatePreset(updated)
-}
-
-function toggleDay(day: number) {
-  const updated = new Set(newDays.value)
-  if (updated.has(day)) {
-    updated.delete(day)
-  } else {
-    updated.add(day)
-  }
-  newDays.value = updated
-}
-
-async function handleAddSchedule() {
-  if (newDays.value.size === 0) return
-  if (!newSchedule.value.startTime || !newSchedule.value.endTime) return
-
-  const presetId = newSchedule.value.presetId || (presets.value[0]?.id ?? 0)
-  if (!presetId) return
-
-  await addSchedule({
-    daysOfWeek: Array.from(newDays.value).sort(),
-    startTime: newSchedule.value.startTime,
-    endTime: newSchedule.value.endTime,
-    presetId,
-    name: newSchedule.value.name,
-    fallbackStatusType: newSchedule.value.fallbackStatusType || null
-  })
-
-  newSchedule.value = {
-    name: '',
-    startTime: '09:00',
-    endTime: '17:00',
-    presetId: 0,
-    fallbackStatusType: ''
-  }
-  newDays.value = new Set()
-}
-
-function beginDeletePreset(id: number) {
-  confirmDeleteId.value = id
-}
-
-async function executeDelete() {
-  if (confirmDeleteId.value === null) return
-  await deletePreset(confirmDeleteId.value)
-  confirmDeleteId.value = null
-}
-
-function cancelDelete() {
-  confirmDeleteId.value = null
-}
-
-function schedulePreset(entry: ScheduleEntry) {
-  return presets.value.find((preset) => preset.id === entry.presetId)
-}
-
-function scheduleStatusType(entry: ScheduleEntry) {
-  const preset = schedulePreset(entry)
-  return preset ? STATUS_TYPES.find((type) => type.value === preset.statusType) ?? null : null
-}
-
-function isOvernight(entry: ScheduleEntry) {
-  return entry.endTime <= entry.startTime
-}
-
-function startEditScheduleName(entryId: string, name: string) {
-  editingScheduleId.value = entryId
-  editingScheduleName.value = name || ''
-}
-
-async function saveScheduleName(entryId: string) {
-  await updateSchedule(entryId, { name: editingScheduleName.value.trim() })
-  editingScheduleId.value = null
-  editingScheduleName.value = ''
-}
+  updateSchedule,
+  updateSettings,
+  STATUS_TYPES,
+  DAY_LABELS,
+  activePreset,
+  currentStatusType,
+  bannerTitle,
+  bannerSubtitle,
+  newSchedule,
+  newDays,
+  confirmDeleteId,
+  editingScheduleId,
+  editingScheduleName,
+  telemetryEnabled,
+  telemetryBusy,
+  isDarkTheme,
+  toggleTelemetry,
+  onPresetFieldChange,
+  toggleDay,
+  handleAddSchedule,
+  beginDeletePreset,
+  executeDelete,
+  cancelDelete,
+  schedulePreset,
+  scheduleStatusType,
+  isOvernight,
+  startEditScheduleName,
+  saveScheduleName
+} = createAutoStatusPageState()
 </script>
 
 <template>
@@ -154,6 +64,14 @@ async function saveScheduleName(entryId: string) {
         <span v-if="status.avatarGuardActive" class="autostatus-badge autostatus-badge-warn">Avatar Guard</span>
         <span class="autostatus-badge" :class="status.vrchatApiAvailable ? 'autostatus-badge-ok' : 'autostatus-badge-err'">{{ status.vrchatApiAvailable ? 'API Ready' : 'API Offline' }}</span>
         <span class="autostatus-badge autostatus-badge-info">OSC: {{ status.lastOscValue ?? 0 }}</span>
+        <button
+          type="button"
+          class="autostatus-badge autostatus-badge-toggle"
+          :class="telemetryEnabled ? 'autostatus-badge-ok' : 'autostatus-badge-warn'"
+          :disabled="telemetryBusy"
+          :title="telemetryEnabled ? 'Click to stop sending join/leave events to ARC-OSC. Events keep collecting locally in arrival order; re-enabling sends the backlog.' : 'Click to start sending join/leave events to ARC-OSC. Any locally-queued backlog is sent first, in order.'"
+          @click="toggleTelemetry"
+        >Telemetry: {{ telemetryEnabled ? 'ON' : 'OFF' }}</button>
       </div>
     </div>
 
@@ -349,6 +267,23 @@ async function saveScheduleName(entryId: string) {
             </label>
             <small>When enabled, ARC will change your status even if it was set externally (via VRChat website or in-game). When disabled, ARC pauses automatic status changes until the next manual or OSC trigger.</small>
           </div>
+
+          <div class="autostatus-field">
+            <label class="autostatus-override-label">
+              <input type="checkbox" :checked="settings.returnToInitial" @change="updateSettings({ returnToInitial: ($event.target as HTMLInputElement).checked })" />
+              Return to initial status
+            </label>
+            <small>When enabled, ARC reverts your VRChat status to what it was before ARC made any changes, whenever a schedule ends or you leave a matched location.</small>
+          </div>
+
+          <div class="autostatus-field">
+            <label>Priority</label>
+            <select :value="settings.prioritySource" @change="updateSettings({ prioritySource: ($event.target as HTMLSelectElement).value })">
+              <option value="schedule">Schedule</option>
+              <option value="manual">Manual</option>
+            </select>
+            <small>Manual status changes take effect immediately when given priority over the timetable.</small>
+          </div>
         </div>
 
         <div class="autostatus-info-box">
@@ -439,6 +374,26 @@ async function saveScheduleName(entryId: string) {
 .autostatus-badge-info {
   background: rgba(52, 152, 219, 0.2);
   color: #3498db;
+}
+/* Interactive variant of .autostatus-badge used for the autostatus
+   telemetry toggle. Looks like a badge at rest, hover reveals
+   clickability, :disabled prevents reentry while the IPC is
+   in-flight. */
+.autostatus-badge-toggle {
+  cursor: pointer;
+  border: none;
+  font-weight: 700;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.autostatus-badge-toggle:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+.autostatus-badge-toggle:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.autostatus-badge-toggle:disabled {
+  cursor: progress;
+  opacity: 0.6;
 }
 
 .autostatus-section {
@@ -624,6 +579,129 @@ async function saveScheduleName(entryId: string) {
   text-transform: none;
   letter-spacing: 0;
   color: #95a5a6;
+}
+
+.autostatus-match-row {
+  display: flex;
+  gap: 6px;
+}
+
+.autostatus-match-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.autostatus-match-row select {
+  width: auto;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.autostatus-checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.autostatus-dropdown-wrap {
+  position: relative;
+}
+
+.autostatus-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fafafa;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.autostatus-dropdown-trigger:hover {
+  border-color: #3498db;
+}
+
+.autostatus-dropdown-trigger:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+}
+
+.autostatus-dropdown-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.autostatus-dropdown-arrow {
+  flex-shrink: 0;
+  margin-left: 8px;
+  font-size: 10px;
+  color: #95a5a6;
+  transition: transform 0.2s ease;
+}
+
+.autostatus-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: #fff;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.autostatus-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.autostatus-dropdown-item:hover {
+  background: #f0f7ff;
+}
+
+.autostatus-dropdown-item input {
+  width: auto;
+  margin: 0;
+  accent-color: #3498db;
+}
+
+:global(body.dark-theme) .autostatus-dropdown-trigger {
+  background: #1e1e1e;
+  border-color: #454545;
+  color: #ecf0f1;
+}
+
+:global(body.dark-theme) .autostatus-dropdown-menu {
+  background: #2b2b2b;
+  border-color: #454545;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+:global(body.dark-theme) .autostatus-dropdown-item {
+  color: #ecf0f1;
+}
+
+:global(body.dark-theme) .autostatus-dropdown-item:hover {
+  background: #3a3a4a;
 }
 
 .autostatus-schedule-empty {
@@ -865,6 +943,14 @@ async function saveScheduleName(entryId: string) {
   background: #f8f9fa;
 }
 
+.autostatus-location-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
 @media (max-width: 900px) {
   .autostatus-banner,
   .autostatus-section-header {
@@ -966,5 +1052,12 @@ async function saveScheduleName(entryId: string) {
 :global(body.dark-theme) .autostatus-icon-btn {
   background: rgba(255, 255, 255, 0.08);
   color: #bdc3c7;
+}
+
+:global(body.dark-theme) .autostatus-location-status {
+  background: #1e1e1e;
+  border: 1px solid #454545;
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 </style>
