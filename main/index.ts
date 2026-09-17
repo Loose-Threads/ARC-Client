@@ -7,7 +7,10 @@ import debug from './services/debugger'
 import OscService from './services/oscService'
 import { OSCQueryService } from './services/oscQueryService'
 import HyperateAddon from './containers/hyperate/hyperate'
-import WhisperAddon from './containers/whisper/whisper'
+import WhisperAddon, {
+  OSC_ADDRESS_WHISPER_STATE,
+  OSC_ADDRESS_WHISPER_AUTO_START
+} from './containers/whisper/whisper'
 import OSCLeashAddon from './containers/oscleash/oscleash'
 import VRChatAPIContainer from './containers/vrchat-api/vrchat-api'
 import OscGoesBrrrAddon from './containers/oscgoesbrrr/oscgoesbrrr'
@@ -41,6 +44,29 @@ let arcLinkContainer: any
 // Custom WebSocket URLs are now persisted across restarts
 let isShuttingDown = false
 let hasShownCriticalError = false
+
+// ── OSC-driven module toggle bindings ────────────────────────────────
+//
+// One literal OSC address per module. The single oscQueryService.on
+// handler below (~L604) routes matching messages to the bound
+// addon.handleOscState() so a VRChat avatar parameter can drive the
+// start/stop state of any registered module — the same code path the
+// IPC handlers use. Adding a second module later means one new entry
+// here (no refactor).
+const OSC_MODULE_BINDINGS: ReadonlyArray<{
+  address: string
+  handler: (value: unknown) => void
+}> = [
+  {
+    address: OSC_ADDRESS_WHISPER_STATE,
+    handler: (value) => whisperAddon?.handleOscState(OSC_ADDRESS_WHISPER_STATE, value)
+  },
+  {
+    address: OSC_ADDRESS_WHISPER_AUTO_START,
+    handler: (value) => whisperAddon?.handleOscState(OSC_ADDRESS_WHISPER_AUTO_START, value)
+  }
+]
+
 initDb()
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 
@@ -473,12 +499,15 @@ function initOscServer() {
       debug.info('Starting HypeRate addon based on autostart setting (OSC service ready)...')
       hyperateAddon.start(oscService)
     }
-    if (appSettings.whisperAutostart && whisperAddon && !whisperAddon.isEnabled()) {
+    if (appSettings.whisperAutostart && whisperAddon && !whisperAddon.isEnabled() && !whisperAddon.isOscDriven()) {
       // Awaited + logged so prod-startup failures (asar path,
       // worker spawn hang, init timeout) are visible in the
       // Electron log. Without the await, the return value was
       // silently dropped and the renderer would sit at
       // "Starting..." forever with no diagnostic trail.
+      // The isOscDriven() short-circuit prevents an avatar-held
+      // /Whisper/AutoStart=0 from racing against this branch —
+      // if OSC says "don't auto-start", we obey.
       debug.info('[autostart] whisper: starting (oscService ready)')
       const ok = await whisperAddon.start(oscService)
       const status = whisperAddon.getStatus()
@@ -486,6 +515,15 @@ function initOscServer() {
         `[autostart] whisper: start returned ${ok}; engineState=${status.engineState}` +
           (status.lastError ? `; lastError=${status.lastError}` : '')
       )
+    }
+    // Register OSC-driven module-toggle addresses as local-only so the
+    // ARC-OSC server never sees them — these are pure client-local
+    // control signals. addLocalOnlyAddress uses exact-match, survives
+    // resetAll(), and the WS forward gate at oscQueryService.isLocalOnly
+    // checks this set before forwarding.
+    if (oscQueryService) {
+      oscQueryService.addLocalOnlyAddress(OSC_ADDRESS_WHISPER_STATE)
+      oscQueryService.addLocalOnlyAddress(OSC_ADDRESS_WHISPER_AUTO_START)
     }
     if (appSettings.oscleashAutostart && oscLeashAddon && !oscLeashAddon.isEnabled()) {
       debug.info('Starting OSCLeash addon based on autostart setting (OSC-Query ready)...')
@@ -614,6 +652,19 @@ async function initOscQueryService() {
             ? oscData.value
             : null
           sendToRenderer('vrchat-avatar-change', { id: localAvatarId })
+        }
+        // OSC-driven module toggle dispatch (app-wide). Looks up the
+        // bound module by literal address, hands the value to its
+        // handleOscState method. Both directions are debounced inside
+        // the addon (edge-trigger on lastOscState) so 60Hz avatar
+        // spam can't hammer start()/stop(). The local-only list at
+        // init time also keeps these addresses out of the WebSocket
+        // forward to ARC-OSC.
+        for (const binding of OSC_MODULE_BINDINGS) {
+          if (oscData.address === binding.address) {
+            binding.handler(oscData.value)
+            break
+          }
         }
         // Send to renderer for logging
         sendToRenderer('osc-received', {
@@ -1588,6 +1639,9 @@ ipcMain.handle('whisper-start', async () => {
     }
     const result = await whisperAddon.start(oscService)
     wsManager?.notifyModuleToggled()
+    // UI took explicit control — release the OSC-driven grey-out
+    // flag so the Autostart toggle re-enables on the next push.
+    whisperAddon.clearOscDriven?.()
     return { success: result, error: result ? undefined : whisperAddon.getStatus().lastError }
   } catch (error: any) {
     debug.error(`Failed to start Whisper addon: ${error.message}`)
@@ -1600,6 +1654,9 @@ ipcMain.handle('whisper-stop', () => {
       whisperAddon.stop()
     }
     wsManager?.notifyModuleToggled()
+    // UI took explicit control — release the OSC-driven grey-out
+    // flag so the Autostart toggle re-enables on the next push.
+    whisperAddon.clearOscDriven?.()
     return { success: true }
   } catch (error: any) {
     debug.error(`Failed to stop Whisper addon: ${error.message}`)
@@ -2375,17 +2432,6 @@ app.whenReady().then(async () => {
   whisperAddon.setCaptureControlCallback((control: any) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('whisper-capture-control', control)
-    }
-  })
-  // Dedicated level channel. Previously levels were sent through
-  // whisper-capture-control {action:'update', gain:<level>}, which
-  // the renderer's whisperCapture.ts listener applied as a SETGAIN
-  // to the AudioWorklet — feedback loop with loud mics. Split
-  // into a separate IPC channel so capture-control and level
-  // reporting never mix.
-  whisperAddon.setLevelCallback((level: number) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('whisper-update', { type: 'level', value: level })
     }
   })
   // Dedicated level channel. Previously levels were sent through

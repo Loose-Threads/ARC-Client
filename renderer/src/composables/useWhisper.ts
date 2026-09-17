@@ -51,6 +51,11 @@ export interface WhisperStatus {
   bundledLibsOk?: boolean
   nativeLibraryLoaded?: boolean
   lastError: string | null
+  // True when an inbound OSC message at ARCOSC/Whisper/State or
+  // /Whisper/AutoStart was the last thing to flip Whisper's enabled
+  // state or autostart flag. Surfaced so the Autostart toggle can
+  // grey out + show a tooltip explaining it's under OSC control.
+  oscDriven?: boolean
 }
 
 export interface WhisperTranscriptEntry {
@@ -92,7 +97,8 @@ const defaultStatus: WhisperStatus = {
   minUtteranceMs: 350,
   bundledLibsOk: true,
   nativeLibraryLoaded: true,
-  lastError: null
+  lastError: null,
+  oscDriven: false
 }
 
 // Module-level singleton state so IPC listeners register exactly once and
@@ -296,6 +302,12 @@ export function useWhisper() {
   const gateOpen = computed(() =>
     status.value.minInputLevel <= 0 || inputLevel.value >= status.value.minInputLevel
   )
+  // True when ARCOSC/Whisper/State or /Whisper/AutoStart was the
+  // last thing to flip Whisper. Drives the Autostart toggle grey-out
+  // in WhisperPage (sets aria-disabled + tooltip). Cleared when the
+  // user explicitly starts/stops from the UI (main/index.ts calls
+  // whisperAddon.clearOscDriven on whisper-start/-stop).
+  const oscDriven = computed(() => status.value.oscDriven === true)
   // Hint text the page shows in place of Vosk's live partial. Whisper doesn't
   // emit partials; the UI gets "Listening — utterance will appear when you stop speaking".
   const partial = computed({
@@ -451,6 +463,7 @@ export function useWhisper() {
     transcript,
     inputLevel,
     gateOpen,
+    oscDriven,
     downloadProgress,
     devices,
     lastFired,

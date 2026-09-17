@@ -21,7 +21,7 @@
         </button>
         <div class="autostart-toggle-container">
           <span class="autostart-label">Auto-start:</span>
-          <div class="autostart-toggle-slider" role="button" tabindex="0" @click="handleToggleAutostart" @keyup.enter="handleToggleAutostart" @keyup.space.prevent="handleToggleAutostart">
+          <div class="autostart-toggle-slider" role="button" tabindex="0" :class="{ 'autostart-toggle-disabled': autostartDisabled }" :aria-disabled="autostartDisabled" :title="autostartDisabled ? autostartDisabledReason : ''" @click="handleToggleAutostart" @keyup.enter="handleToggleAutostart" @keyup.space.prevent="handleToggleAutostart">
             <div class="autostart-toggle-option disabled" :class="{ active: !autostart }">Disabled</div>
             <div class="autostart-toggle-option enabled" :class="{ active: autostart }">Enabled</div>
           </div>
@@ -326,6 +326,8 @@ const {
   handleToggle,
   handleToggleAutostart,
   handleDeviceChange,
+  autostartDisabled,
+  autostartDisabledReason,
   commitAudioSettings,
   applyModelDir,
   clearModelPath,
@@ -345,6 +347,14 @@ const {
   font-size: 13px;
   font-weight: 600;
   opacity: 0.8;
+}
+/* OSC-driven grey-out. Matches both light and dark themes — the
+   page-level `color: inherit` cascades from the root theme variable
+   so opacity 0.5 reads correctly in both. */
+.autostart-toggle-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 .whisper-hint-block {
   font-size: 12px;
