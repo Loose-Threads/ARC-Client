@@ -116,6 +116,7 @@ class AutoStatus {
         // Location tracking
         
         
+        
         debug.info('[AutoStatus] Container initialized')
     }
 
@@ -400,6 +401,9 @@ class AutoStatus {
         if (source === 'manual') {
             this.externallySet = false
         }
+        // TODO(autostatus): change status based on players in the instance, per-user status filtering with tier overrides.
+        // let preset rules resolve a per-VRChat-user override before
+        // applying. Tier precedence: per-user > group > world > schedule > default.
         // External override protection (skip for manual triggers)
         if (source !== 'manual' && this.externallySet && !this.config.settings?.alwaysAllowOverride) {
             debug.info(`[AutoStatus] Skipping preset ${normalizedPresetId} — status was changed externally (source: ${source})`)
