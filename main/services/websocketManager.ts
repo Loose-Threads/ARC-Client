@@ -109,6 +109,17 @@ class WebSocketManager {
             getSocket: () => this.socket,
             buildPayload: () => this.buildClientStatePayload(),
         })
+        // Server → client command handlers. The envelope dispatcher in
+        // setupEventHandlers() re-emits each client:command on THIS
+        // manager's event bus (not the socket), so these must be
+        // registered here — once, in the constructor. Registering them
+        // on the socket (as previously done) was dead code: the socket
+        // never receives events named 'client:command:<name>'.
+        this.on('client:command:notice', (env: unknown) => this.handleNoticeCommand(env))
+        this.on('client:command:request-state', (env: unknown) => this.handleRequestStateCommand(env))
+        this.on('client:command:check-modules', (env: unknown) => this.handleCheckModulesCommand(env))
+        this.on('client:command:config-sync', (env: unknown) => this.handleConfigSyncCommand(env))
+        this.on('client:command:telemetry', (env: unknown) => this.handleTelemetryCommand(env))
     }
 
     /**
@@ -116,13 +127,14 @@ class WebSocketManager {
      * of truth for the wire shape — the channel uses this for live
      * emits, buffered snapshots, and fresh (request-state) replies.
      */
-    private buildClientStatePayload(): { v: 1; ts: number; activePage: string; modules: string[]; sessionId: string } {
+    private buildClientStatePayload(): { v: 1; ts: number; activePage: string; modules: string[]; sessionId: string; telemetryEnabled: boolean } {
         return {
             v: 1,
             ts: Date.now(),
             activePage: this.activePage,
             modules: this.collectModuleStates(),
             sessionId: this.sessionId,
+            telemetryEnabled: this.telemetryEnabled,
         }
     }
 
@@ -459,10 +471,10 @@ class WebSocketManager {
         // just the event-name → method table (reconnect-safe: these
         // are re-registered per setupEventHandlers call on a fresh
         // socket, so no stacking is possible).
-        this.socket.on('client:command:request-state', (env: unknown) => this.handleRequestStateCommand(env))
-        this.socket.on('client:command:notice', (env: unknown) => this.handleNoticeCommand(env))
-        this.socket.on('client:command:check-modules', (env: unknown) => this.handleCheckModulesCommand(env))
-        this.socket.on('client:command:config-sync', (env: unknown) => this.handleConfigSyncCommand(env))
+        // NOTE: the handlers themselves are registered on the manager's
+        // event bus in the constructor (the envelope dispatcher above
+        // re-emits client:command there). Nothing socket-level to bind
+        // for individual commands.
         // Install (or re-install) the request-id correlation dispatchers so any
         // response that arrives after a Socket.IO internal reconnect still
         // resolves the corresponding pending promise.
@@ -542,6 +554,11 @@ class WebSocketManager {
                 status: 'disconnected',
                 reason
             })
+            if (reason === 'io server disconnect' && this.socket && this.connectionConfig.autoReconnect) {
+                try {
+                    this.socket.connect()
+                } catch { /* ignore — next reconnect cycle will retry */ }
+            }
         })
         this.socket.on('connect_error', (error: Error) => {
             this.isConnected = false
@@ -823,6 +840,21 @@ class WebSocketManager {
             // Turning off — stop heartbeat and clear pending debounce
             this.clientStateChannel.stop()
         }
+        if (this.isConnected && this.socket) {
+            try { this.socket.emit('clientState', this.buildClientStatePayload()) } catch { /* ignore */ }
+        }
+    }
+    private handleTelemetryCommand(env: unknown): void {
+        try {
+            const p = (env as { payload?: unknown } | null)?.payload as { enabled?: unknown } | undefined
+            if (!p || typeof p.enabled !== 'boolean') return
+            this.setTelemetryEnabled(p.enabled)
+            try {
+                const saver = (globalThis as any).__arc_saveClientTelemetry
+                if (typeof saver === 'function') saver(p.enabled)
+            } catch { /* ignore */ }
+            this.emit('telemetry-changed', { enabled: p.enabled, source: 'server' })
+        } catch { /* ignore */ }
     }
     /**
      * Pull the most recent enqueue timestamp from the active

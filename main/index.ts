@@ -401,6 +401,17 @@ function initWebSocket() {
     // Handle server-sent notice/banner
     wsManager.on('notice', (data: any) => {
       sendToRenderer('notice-banner', data)
+      // Mirror staff notifications (and any other server notice) as an
+      // XSOverlay popup in VRChat when the addon is running. Best-effort:
+      // a failed WS send must never break the in-app banner path.
+      try {
+        if (xsOverlayAddon && xsOverlayAddon.isEnabled() && data?.title && data?.body) {
+          const timeoutSec = Math.max(3, Math.ceil((typeof data.ttlMs === 'number' ? data.ttlMs : 8000) / 1000))
+          xsOverlayAddon.sendNotification(String(data.title), String(data.body), { timeout: timeoutSec })
+        }
+      } catch (err) {
+        debug.warn(`XSOverlay notify forward failed: ${(err as Error).message}`)
+      }
     })
     // Handle server config-sync delta (defaultAppSettings merge)
     wsManager.on('config-sync', (data: any) => {
@@ -417,6 +428,9 @@ function initWebSocket() {
       configManager.updateAppSettings(merged)
       debug.info(`config-sync merged ${Object.keys(incoming).length} default(s) into appSettings`)
       sendToRenderer('app-settings', configManager.getAppSettings())
+    })
+    wsManager.on('telemetry-changed', (data: any) => {
+      sendToRenderer('telemetry-changed', data)
     })
   }
 }
@@ -750,6 +764,9 @@ function sendToRenderer(channel: string, data: any) {
 ipcMain.handle('get-config', () => {
   return configManager.getConfig()
 })
+;(globalThis as any).__arc_saveClientTelemetry = (enabled: boolean) => {
+  configManager.updateAppSettings({ telemetryEnabled: enabled === true })
+}
 ipcMain.handle('get-server-config', () => {
   return serverConfig
 })

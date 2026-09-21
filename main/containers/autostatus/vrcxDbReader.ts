@@ -40,7 +40,7 @@ export function getVrcxCurrentLocation(dbPathOverride: string | null = null): Vr
   let conn: import('better-sqlite3').Database | null = null
   try {
     conn = new (DatabaseClass as any)(dbPath, { readonly: true, fileMustExist: true })
-    const row = conn.prepare(LOCATION_QUERY).get() as VrcxLocationRow | undefined
+    const row = conn!.prepare(LOCATION_QUERY).get() as VrcxLocationRow | undefined
     return row || null
   } catch (error: unknown) {
     debug.warn(`[VrcxDbReader] Failed to read VRCX database: ${(error as Error).message}`)
@@ -58,7 +58,7 @@ export function getVrcxWorldName(worldId: string, dbPathOverride: string | null 
   let conn: import('better-sqlite3').Database | null = null
   try {
     conn = new (DatabaseClass as any)(dbPath, { readonly: true, fileMustExist: true })
-    const row = conn.prepare('SELECT name FROM cache_world WHERE id = ? LIMIT 1').get(worldId) as { name: string } | undefined
+    const row = conn!.prepare('SELECT name FROM cache_world WHERE id = ? LIMIT 1').get(worldId) as { name: string } | undefined
     return row?.name || null
   } catch {
     return null

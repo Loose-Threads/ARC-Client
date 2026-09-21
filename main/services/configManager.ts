@@ -118,6 +118,8 @@ interface AutoStatusSettings {
   cooldownSeconds: number
   timeFormat: string
   alwaysAllowOverride?: boolean
+  returnToInitial?: boolean
+  prioritySource?: 'schedule' | 'location'
 }
 
 interface AutoStatusConfig {
@@ -214,6 +216,15 @@ class ConfigManager {
         trackers: [],
         trackerNames: {},
         trackerStates: {}
+      },
+      // Whisper configuration
+      whisper: {
+        modelPath: null,
+        inputDeviceId: null,
+        minInputLevel: 0,
+        inputGain: 1,
+        minUtteranceMs: 350,
+        commands: []
       },
       // OSCLeash configuration
       oscleash: {

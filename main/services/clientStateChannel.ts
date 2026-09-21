@@ -8,7 +8,7 @@
  * gate, teardown, and drain paths all have exactly one owner.
  *
  * Wire contract (must stay in sync with ARC-OSC clientState
- * handler): `{ v: 1, ts, activePage?, modules: string[], sessionId }`
+ * handler): `{ v: 1, ts, activePage?, modules: string[], sessionId, telemetryEnabled }`
  * — sparse encoding, modules array contains ONLY enabled names.
  */
 export type ClientStateReason = 'connect' | 'module-toggle' | 'page-change' | 'heartbeat'

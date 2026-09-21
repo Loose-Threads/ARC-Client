@@ -18,6 +18,7 @@ export function createWhisperPageState() {
     transcript,
     inputLevel,
     gateOpen,
+    oscDriven,
     downloadProgress,
     devices,
     lastFired,
@@ -233,8 +234,20 @@ export function createWhisperPageState() {
     }
   }
   async function handleToggleAutostart() {
+    // OSC has taken over control of the autostart flag — the UI
+    // toggle must no-op until OSC releases it via /Whisper/AutoStart=1
+    // (which leaves oscDriven true) or the user starts/stops via
+    // the main toggle (which clears oscDriven in main/index.ts).
+    if (oscDriven.value) return
     await setAutostart(!autostart.value)
   }
+  // Disable the Autostart toggle while an OSC address is driving
+  // Whisper. Drives `:disabled` on the toggle slider in the template
+  // and a tooltip so the user can see *why* it's greyed.
+  const autostartDisabled = computed(() => oscDriven.value === true)
+  const autostartDisabledReason = computed(() =>
+    oscDriven.value ? 'OSC address /avatar/parameters/ARCOSC/Whisper/AutoStart is currently controlling this. Use the Whisper Start/Stop button to reclaim.' : ''
+  )
   async function handleDeviceChange(event: Event) {
     const value = (event.target as HTMLSelectElement).value
     await setInputDevice(value || null)

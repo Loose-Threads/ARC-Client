@@ -311,6 +311,9 @@ const api = {
   onNoticeBanner: (callback: (data: any) => void) => {
     ipcRenderer.on('notice-banner', (_event, data) => callback(data))
   },
+  onTelemetryChanged: (callback: (data: any) => void) => {
+    ipcRenderer.on('telemetry-changed', (_event, data) => callback(data))
+  },
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel)
   },
