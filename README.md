@@ -4,7 +4,7 @@
 
 **The transparent, feature-rich desktop bridge for VRChat remote control**
 
-[![Version](https://img.shields.io/badge/version-0.90.2-blue.svg)](https://github.com/ComfyChloe/ARC-Client)
+[![Version](https://img.shields.io/badge/version-0.90.2-blue.svg)](https://github.com/Loose-Threads/ARC-Client)
 [![Electron](https://img.shields.io/badge/electron-33.0.0-47848F.svg?logo=electron&logoColor=white)](https://electronjs.org/)
 [![License](https://img.shields.io/badge/license-ComfyChloe%20Non--Commercial%20Copyleft%20License%201.2-lightgrey.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-Open%20Beta-brightgreen.svg)]()
@@ -233,7 +233,7 @@ Built-in feedback system to communicate directly with the development team. Subm
 
 ```powershell
 # Clone the repository
-git clone https://github.com/ComfyChloe/ARC-Client.git
+git clone https://github.com/Loose-Threads/ARC-Client.git
 cd ARC-Client
 
 # Install dependencies

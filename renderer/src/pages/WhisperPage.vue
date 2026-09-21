@@ -21,7 +21,7 @@
         </button>
         <div class="autostart-toggle-container">
           <span class="autostart-label">Auto-start:</span>
-          <div class="autostart-toggle-slider" role="button" tabindex="0" @click="handleToggleAutostart" @keyup.enter="handleToggleAutostart" @keyup.space.prevent="handleToggleAutostart">
+          <div class="autostart-toggle-slider" role="button" tabindex="0" :class="{ 'autostart-toggle-disabled': autostartDisabled }" :aria-disabled="autostartDisabled" :title="autostartDisabled ? autostartDisabledReason : ''" @click="handleToggleAutostart" @keyup.enter="handleToggleAutostart" @keyup.space.prevent="handleToggleAutostart">
             <div class="autostart-toggle-option disabled" :class="{ active: !autostart }">Disabled</div>
             <div class="autostart-toggle-option enabled" :class="{ active: autostart }">Enabled</div>
           </div>
@@ -35,71 +35,6 @@
         <p>{{ preflightResult.lastError || 'whisper.node could not be located.' }}</p>
         <p v-if="preflightResult.dllPath" class="whisper-preflight-path">Expected at: <code>{{ preflightResult.dllPath }}</code></p>
         <p class="whisper-preflight-hint">Reinstall the application to restore the speech recognition libraries. If the issue persists, open the application log for the underlying DLL error.</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Audio Input</h3>
-      <div class="form-group">
-        <label>Microphone</label>
-        <select :value="status.inputDeviceId || ''" @change="handleDeviceChange">
-          <option value="">System default</option>
-          <option v-for="device in devices" :key="device.deviceId" :value="device.deviceId">{{ device.label }}</option>
-        </select>
-      </div>
-      <div class="whisper-meter-wrap">
-        <label>Input level</label>
-        <div class="whisper-meter">
-          <div class="whisper-meter-fill" :class="{ 'gate-open': gateOpen && status.enabled }" :style="{ width: `${inputLevel}%` }"></div>
-          <div v-if="minLevelDraft > 0" class="whisper-meter-threshold" :style="{ left: `${minLevelDraft}%` }"></div>
-        </div>
-        <div class="whisper-meter-caption">
-          <span>{{ inputLevel }}%</span>
-          <span v-if="status.enabled && minLevelDraft > 0">{{ gateOpen ? 'Gate open - recording' : 'Below threshold - muted' }}</span>
-        </div>
-      </div>
-      <div class="form-group whisper-slider-row">
-        <label>Min input level: {{ minLevelDraft }}% <span class="whisper-hint">(Whisper only records above this level; 0 disables the gate)</span></label>
-        <input type="range" min="0" max="100" step="1" v-model.number="minLevelDraft" @change="commitAudioSettings" />
-      </div>
-      <button class="whisper-advanced-toggle" :class="{ expanded: advancedOpen }" type="button" @click="toggleAdvanced">
-        <span class="arrow">&#9656;</span>
-        <span>Advanced</span>
-      </button>
-      <div v-if="advancedOpen" class="whisper-advanced-section">
-        <div class="form-group whisper-slider-row">
-          <label>Input gain: {{ gainDraft }}% <span class="whisper-hint">(applied live to the mic signal)</span></label>
-          <input type="range" min="0" max="300" step="5" v-model.number="gainDraft" @change="commitAudioSettings" />
-        </div>
-        <div class="form-group whisper-slider-row">
-          <label>Min utterance: {{ minUtteranceDraft }} ms <span class="whisper-hint">(utterances shorter than this are dropped as noise blips; default 350 ms)</span></label>
-          <input type="range" min="0" max="2000" step="50" v-model.number="minUtteranceDraft" @change="commitAudioSettings" />
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Speech Model</h3>
-      <p class="whisper-field-text">{{ modelStateText }}</p>
-      <p class="whisper-model-path">{{ status.modelPath ?? 'No model selected' }}</p>
-      <div v-if="downloading || downloadProgress?.state === 'error'" class="whisper-progress-block">
-        <div class="whisper-progress">
-          <div class="whisper-progress-fill" :style="{ width: `${downloadProgress?.percent ?? 0}%` }"></div>
-        </div>
-        <p class="whisper-progress-label" :class="{ 'whisper-progress-error': downloadProgress?.state === 'error' }">{{ downloadLabel }}</p>
-      </div>
-      <div class="whisper-action-row">
-        <button class="btn btn-primary" :disabled="downloading" @click="downloadModel">Download Tiny English Model (~75 MB)</button>
-        <button class="btn btn-secondary" @click="openModelList">Browse All Models</button>
-      </div>
-      <div class="form-group whisper-top-gap">
-        <label>Custom model file <span class="whisper-hint">(absolute path to a single .bin ggml model file)</span></label>
-        <div class="whisper-model-dir-row">
-          <input type="text" v-model="modelPathDraft" placeholder="C:\path\to\ggml-tiny.en.bin" />
-          <button class="btn btn-secondary btn-small" @click="applyModelDir">Apply</button>
-          <button v-if="status.modelPath" class="btn btn-secondary btn-small" @click="clearModelPath">Clear</button>
-        </div>
-        <p v-if="modelDirError" class="whisper-error-text">{{ modelDirError }}</p>
       </div>
     </div>
 
@@ -267,6 +202,69 @@
         <button class="btn btn-primary" @click="addCommand">+ Add Command</button>
       </div>
     </div>
+        <div class="card">
+      <h3>Audio Input</h3>
+      <div class="form-group">
+        <label>Microphone</label>
+        <select :value="status.inputDeviceId || ''" @change="handleDeviceChange">
+          <option value="">System default</option>
+          <option v-for="device in devices" :key="device.deviceId" :value="device.deviceId">{{ device.label }}</option>
+        </select>
+      </div>
+      <div class="whisper-meter-wrap">
+        <label>Input level</label>
+        <div class="whisper-meter">
+          <div class="whisper-meter-fill" :class="{ 'gate-open': gateOpen && status.enabled }" :style="{ width: `${inputLevel}%` }"></div>
+          <div v-if="minLevelDraft > 0" class="whisper-meter-threshold" :style="{ left: `${minLevelDraft}%` }"></div>
+        </div>
+        <div class="whisper-meter-caption">
+          <span>{{ inputLevel }}%</span>
+          <span v-if="status.enabled && minLevelDraft > 0">{{ gateOpen ? 'Gate open - recording' : 'Below threshold - muted' }}</span>
+        </div>
+      </div>
+      <div class="form-group whisper-slider-row">
+        <label>Min input level: {{ minLevelDraft }}% <span class="whisper-hint">(Whisper only records above this level; 0 disables the gate)</span></label>
+        <input type="range" min="0" max="100" step="1" v-model.number="minLevelDraft" @change="commitAudioSettings" />
+      </div>
+      <button class="whisper-advanced-toggle" :class="{ expanded: advancedOpen }" type="button" @click="toggleAdvanced">
+        <span class="arrow">&#9656;</span>
+        <span>Advanced</span>
+      </button>
+      <div v-if="advancedOpen" class="whisper-advanced-section">
+        <div class="form-group whisper-slider-row">
+          <label>Input gain: {{ gainDraft }}% <span class="whisper-hint">(applied live to the mic signal)</span></label>
+          <input type="range" min="0" max="300" step="5" v-model.number="gainDraft" @change="commitAudioSettings" />
+        </div>
+        <div class="form-group whisper-slider-row">
+          <label>Min utterance: {{ minUtteranceDraft }} ms <span class="whisper-hint">(utterances shorter than this are dropped as noise blips; default 350 ms)</span></label>
+          <input type="range" min="0" max="2000" step="50" v-model.number="minUtteranceDraft" @change="commitAudioSettings" />
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Speech Model</h3>
+      <p class="whisper-field-text">{{ modelStateText }}</p>
+      <p class="whisper-model-path">{{ status.modelPath ?? 'No model selected' }}</p>
+      <div v-if="downloading || downloadProgress?.state === 'error'" class="whisper-progress-block">
+        <div class="whisper-progress">
+          <div class="whisper-progress-fill" :style="{ width: `${downloadProgress?.percent ?? 0}%` }"></div>
+        </div>
+        <p class="whisper-progress-label" :class="{ 'whisper-progress-error': downloadProgress?.state === 'error' }">{{ downloadLabel }}</p>
+      </div>
+      <div class="whisper-action-row">
+        <button class="btn btn-primary" :disabled="downloading" @click="downloadModel">Download Tiny English Model (~75 MB)</button>
+        <button class="btn btn-secondary" @click="openModelList">Browse All Models</button>
+      </div>
+      <div class="form-group whisper-top-gap">
+        <label>Custom model file <span class="whisper-hint">(absolute path to a single .bin ggml model file)</span></label>
+        <div class="whisper-model-dir-row">
+          <input type="text" v-model="modelPathDraft" placeholder="C:\path\to\ggml-tiny.en.bin" />
+          <button class="btn btn-secondary btn-small" @click="applyModelDir">Apply</button>
+          <button v-if="status.modelPath" class="btn btn-secondary btn-small" @click="clearModelPath">Clear</button>
+        </div>
+        <p v-if="modelDirError" class="whisper-error-text">{{ modelDirError }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -328,6 +326,8 @@ const {
   handleToggle,
   handleToggleAutostart,
   handleDeviceChange,
+  autostartDisabled,
+  autostartDisabledReason,
   commitAudioSettings,
   applyModelDir,
   clearModelPath,
@@ -347,6 +347,14 @@ const {
   font-size: 13px;
   font-weight: 600;
   opacity: 0.8;
+}
+/* OSC-driven grey-out. Matches both light and dark themes — the
+   page-level `color: inherit` cascades from the root theme variable
+   so opacity 0.5 reads correctly in both. */
+.autostart-toggle-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 .whisper-hint-block {
   font-size: 12px;

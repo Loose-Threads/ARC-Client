@@ -100,7 +100,7 @@ class VRChatAPIContainer {
       application: {
         name: appName,
         version: appVersion,
-        contact: 'https://github.com/ComfyChloe/ARC-Client'
+        contact: 'https://github.com/Loose-Threads/ARC-Client'
       },
       authentication: { optimistic: false },
       keyv: keyvAdapter as any,
