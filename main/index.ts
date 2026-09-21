@@ -270,6 +270,20 @@ function initWebSocket() {
     wsManager.setConfig({
       serverUrl: serverConfig.websocketServerUrl
     })
+    wsManager.setModuleAccessors({
+      getEnabledModules: () => {
+        const mods: string[] = []
+        if (xsOverlayAddon?.isEnabled?.()) mods.push('xs-overlay')
+        if (hyperateAddon?.isEnabled?.()) mods.push('hyperate')
+        if (whisperAddon?.isEnabled?.()) mods.push('whisper')
+        if (oscLeashAddon?.isEnabled?.()) mods.push('osc-leash')
+        if (oscGoesBrrrAddon?.isEnabled?.()) mods.push('osc-goes-brrr')
+        if (openShockContainer?.isEnabled?.()) mods.push('open-shock')
+        if (autoStatusContainer?.isEnabled?.()) mods.push('autostatus')
+        if (arcLinkContainer?.isEnabled?.()) mods.push('arclink')
+        return mods
+      }
+    })
     wsManager.on('connection-status', (data: any) => {
       sendToRenderer('websocket-status', data)
       if (data.status === 'connected') {
@@ -326,6 +340,9 @@ function initWebSocket() {
         xsOverlayAddon.handleAvatarChange(data)
       }
     })
+    wsManager.on('avatar-state-confirmed', (data: any) => {
+      sendToRenderer('websocket-avatar-state-confirmed', data)
+    })
     wsManager.on('parameter-update', (data: any) => {
       sendToRenderer('websocket-parameter-update', data)
     })
@@ -381,6 +398,40 @@ function initWebSocket() {
       debug.info(`Unsuppress denied for ${data?.address}: ${data?.reason}`)
       sendToRenderer('unsuppress-denied', data)
     })
+    // Handle server-sent notice/banner
+    wsManager.on('notice', (data: any) => {
+      sendToRenderer('notice-banner', data)
+      // Mirror staff notifications (and any other server notice) as an
+      // XSOverlay popup in VRChat when the addon is running. Best-effort:
+      // a failed WS send must never break the in-app banner path.
+      try {
+        if (xsOverlayAddon && xsOverlayAddon.isEnabled() && data?.title && data?.body) {
+          const timeoutSec = Math.max(3, Math.ceil((typeof data.ttlMs === 'number' ? data.ttlMs : 8000) / 1000))
+          xsOverlayAddon.sendNotification(String(data.title), String(data.body), { timeout: timeoutSec })
+        }
+      } catch (err) {
+        debug.warn(`XSOverlay notify forward failed: ${(err as Error).message}`)
+      }
+    })
+    // Handle server config-sync delta (defaultAppSettings merge)
+    wsManager.on('config-sync', (data: any) => {
+      if (!data?.defaultAppSettings) return
+      const incoming = data.defaultAppSettings as Record<string, unknown>
+      const current = configManager.getAppSettings()
+      // Only fill keys that are currently undefined; never overwrite user-set values
+      const merged = { ...current }
+      for (const key of Object.keys(incoming)) {
+        if (merged[key] === undefined) {
+          merged[key] = incoming[key]
+        }
+      }
+      configManager.updateAppSettings(merged)
+      debug.info(`config-sync merged ${Object.keys(incoming).length} default(s) into appSettings`)
+      sendToRenderer('app-settings', configManager.getAppSettings())
+    })
+    wsManager.on('telemetry-changed', (data: any) => {
+      sendToRenderer('telemetry-changed', data)
+    })
   }
 }
 function initOscServer() {
@@ -425,6 +476,13 @@ function initOscServer() {
     }
     // Start autostart addons now that OSC service is ready
     const appSettings = configManager.getAppSettings()
+    // Apply the persisted autostatus telemetry toggle to the
+    // websocket manager so clientState emissions respect it.
+    // Snapshots collected while telemetry was off stay buffered in
+    // the ClientStateChannel until the toggle flips back on.
+    if (wsManager) {
+      wsManager.setTelemetryEnabled(appSettings.telemetryEnabled ?? true)
+    }
     if (appSettings.hyperateAutostart && hyperateAddon && !hyperateAddon.isEnabled()) {
       debug.info('Starting HypeRate addon based on autostart setting (OSC service ready)...')
       hyperateAddon.start(oscService)
@@ -565,6 +623,12 @@ async function initOscQueryService() {
           }
           autoStatusContainer.handleOscMessage(oscData)
         }
+        if (oscData.address === '/avatar/change') {
+          const localAvatarId = typeof oscData.value === 'string' && oscData.value.length > 0
+            ? oscData.value
+            : null
+          sendToRenderer('vrchat-avatar-change', { id: localAvatarId })
+        }
         // Send to renderer for logging
         sendToRenderer('osc-received', {
           address: oscData.address,
@@ -700,6 +764,9 @@ function sendToRenderer(channel: string, data: any) {
 ipcMain.handle('get-config', () => {
   return configManager.getConfig()
 })
+;(globalThis as any).__arc_saveClientTelemetry = (enabled: boolean) => {
+  configManager.updateAppSettings({ telemetryEnabled: enabled === true })
+}
 ipcMain.handle('get-server-config', () => {
   return serverConfig
 })
@@ -773,6 +840,14 @@ ipcMain.handle('set-app-settings', (_event, newSettings: any) => {
   debug.info(`App settings updated`)
   if (!result) {
     debug.error('Failed to save app settings to config file')
+  }
+  // Push autostatus telemetry toggle immediately to the websocket
+  // manager so the next engine ping respects the new state and any
+  // backlog drains in arrival order (no restart required).
+  if (newSettings && Object.prototype.hasOwnProperty.call(newSettings, 'telemetryEnabled')) {
+    if (wsManager) {
+      wsManager.setTelemetryEnabled(!!newSettings.telemetryEnabled)
+    }
   }
   return configManager.getAppSettings()
 })
@@ -887,6 +962,11 @@ ipcMain.handle('websocket-disconnect', () => {
     return { success: true, message: 'Already disconnected' }
   } catch (error: any) {
     return { success: false, error: error.message }
+  }
+})
+ipcMain.on('set-active-page', (_e, page: unknown) => {
+  if (wsManager && typeof page === 'string' && page.length >= 1 && page.length <= 64) {
+    wsManager.setActivePage(page)
   }
 })
 ipcMain.handle('websocket-send-osc', (_event, data: any) => {
@@ -1305,6 +1385,7 @@ ipcMain.handle('hyperate-start', () => {
       return { success: false, error: 'HypeRate addon not initialized' }
     }
     const result = hyperateAddon.start(oscService)
+    wsManager?.notifyModuleToggled()
     return { success: result }
   } catch (error: any) {
     debug.error(`Failed to start HypeRate addon: ${error.message}`)
@@ -1316,6 +1397,7 @@ ipcMain.handle('hyperate-stop', () => {
     if (hyperateAddon) {
       hyperateAddon.stop()
     }
+    wsManager?.notifyModuleToggled()
     return { success: true }
   } catch (error: any) {
     debug.error(`Failed to stop HypeRate addon: ${error.message}`)
@@ -1522,6 +1604,7 @@ ipcMain.handle('whisper-start', async () => {
       return { success: false, error: 'Whisper addon not initialized' }
     }
     const result = await whisperAddon.start(oscService)
+    wsManager?.notifyModuleToggled()
     return { success: result, error: result ? undefined : whisperAddon.getStatus().lastError }
   } catch (error: any) {
     debug.error(`Failed to start Whisper addon: ${error.message}`)
@@ -1533,6 +1616,7 @@ ipcMain.handle('whisper-stop', () => {
     if (whisperAddon) {
       whisperAddon.stop()
     }
+    wsManager?.notifyModuleToggled()
     return { success: true }
   } catch (error: any) {
     debug.error(`Failed to stop Whisper addon: ${error.message}`)
@@ -1637,6 +1721,7 @@ ipcMain.handle('oscleash-start', () => {
       return { success: false, error: 'OSC service not available' }
     }
     const result = oscLeashAddon.start(oscQueryService, oscService)
+    wsManager?.notifyModuleToggled()
     return { success: result }
   } catch (error: any) {
     debug.error(`Failed to start OSCLeash addon: ${error.message}`)
@@ -1648,6 +1733,7 @@ ipcMain.handle('oscleash-stop', () => {
     if (oscLeashAddon) {
       oscLeashAddon.stop()
     }
+    wsManager?.notifyModuleToggled()
     return { success: true }
   } catch (error: any) {
     debug.error(`Failed to stop OSCLeash addon: ${error.message}`)
@@ -1713,6 +1799,7 @@ ipcMain.handle('ogb-start', () => {
       return { success: false, error: 'OscGoesBrrr addon not initialized' }
     }
     const result = oscGoesBrrrAddon.start()
+    wsManager?.notifyModuleToggled()
     return result
   } catch (error: any) {
     debug.error(`Failed to start OscGoesBrrr addon: ${error.message}`)
@@ -1724,6 +1811,7 @@ ipcMain.handle('ogb-stop', () => {
     if (oscGoesBrrrAddon) {
       oscGoesBrrrAddon.stop()
     }
+    wsManager?.notifyModuleToggled()
     return { success: true }
   } catch (error: any) {
     debug.error(`Failed to stop OscGoesBrrr addon: ${error.message}`)
@@ -1961,11 +2049,15 @@ ipcMain.handle('openshock-get-status', async () => {
 })
 ipcMain.handle('openshock-start', async (_event, apiToken: string) => {
   if (!openShockContainer) return { success: false, error: 'Not initialized' }
-  return openShockContainer.start(apiToken)
+  const result = await openShockContainer.start(apiToken)
+  wsManager?.notifyModuleToggled()
+  return result
 })
 ipcMain.handle('openshock-stop', async () => {
   if (!openShockContainer) return { success: false, error: 'Not initialized' }
-  return openShockContainer.stop()
+  const result = await openShockContainer.stop()
+  wsManager?.notifyModuleToggled()
+  return result
 })
 ipcMain.handle('openshock-clear-saved-token', async () => {
   if (!openShockContainer) return { success: false, error: 'Not initialized' }
@@ -2107,11 +2199,15 @@ ipcMain.handle('xsoverlay-get-notification-logs', async (_event, limit: number =
 // ARCLink IPC handlers
 ipcMain.handle('arclink-start', async () => {
   if (!arcLinkContainer) return { success: false, error: 'Not initialized' }
-  return arcLinkContainer.start()
+  const result = await arcLinkContainer.start()
+  wsManager?.notifyModuleToggled()
+  return result
 })
 ipcMain.handle('arclink-stop', async () => {
   if (!arcLinkContainer) return { success: false, error: 'Not initialized' }
-  return arcLinkContainer.stop()
+  const result = await arcLinkContainer.stop()
+  wsManager?.notifyModuleToggled()
+  return result
 })
 ipcMain.handle('arclink-get-status', async () => {
   if (!arcLinkContainer) return { success: false, error: 'Not initialized' }
@@ -2130,6 +2226,7 @@ ipcMain.handle('xsoverlay-start', () => {
       return { success: false, error: 'XS Overlay addon not initialized' }
     }
     const result = xsOverlayAddon.start()
+    wsManager?.notifyModuleToggled()
     return { success: result }
   } catch (error: any) {
     debug.error(`Failed to start XS Overlay addon: ${error.message}`)
@@ -2141,6 +2238,7 @@ ipcMain.handle('xsoverlay-stop', () => {
     if (xsOverlayAddon) {
       xsOverlayAddon.stop()
     }
+    wsManager?.notifyModuleToggled()
     return { success: true }
   } catch (error: any) {
     debug.error(`Failed to stop XS Overlay addon: ${error.message}`)
@@ -2245,6 +2343,12 @@ app.whenReady().then(async () => {
   vrchatApiContainer = new VRChatAPIContainer()
   oscGoesBrrrAddon = new OscGoesBrrrAddon()
   autoStatusContainer = new AutoStatusContainer()
+  // Expose the auto-status container as a global handle so the
+  // location tracker (lazy-loaded inside the autostatus module) can
+  // reach it without a circular import. Used by the clientInfo
+  // emitter to read the local VRChat user id + drain the queue
+  // after the WebSocket (re)connects.
+  ;(globalThis as any).__arc_auto_status_container = autoStatusContainer
   xsOverlayAddon = new XSOverlayAddon()
   calendarContainer = new Calendar()
   openShockContainer = new OpenShock()
@@ -2678,6 +2782,10 @@ function cleanup(source = 'unknown') {
     debug.error(`Error stopping ARCLink container: ${error.message}`)
     arcLinkContainer = null
   }
+  // Remove the globalThis hook for the auto-status container.
+  // The container itself is already nulled above; this removes the
+  // global reference so no other module can reach a stale handle.
+  delete (globalThis as any).__arc_auto_status_container
   if ((global as any).oscIpcBatchInterval) {
     clearInterval((global as any).oscIpcBatchInterval)
     ;(global as any).oscIpcBatchInterval = null
@@ -2692,12 +2800,30 @@ function cleanup(source = 'unknown') {
   }
 }
 app.on('window-all-closed', () => {
+  // Synchronously flush any pending clientInfo updates over the
+  // existing authenticated WebSocket BEFORE running the rest of
+  // shutdown cleanup. Lets the server mark the connection as a
+  // clean shutdown instead of a dropped socket.
+  try {
+    const result = wsManager.flushAndClose()
+    debug.info(`[main] flushed ${result.pending} clientInfo events on shutdown; ack=${result.flushed}`)
+  } catch (err) {
+    debug.warn(`[main] flushAndClose failed: ${(err as Error).message}`)
+  }
   cleanup('window-all-closed')
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 app.on('before-quit', () => {
+  // Same flush as window-all-closed — covers the user-quit path
+  // (menu Quit, Cmd+Q, dock quit, etc.).
+  try {
+    const result = wsManager.flushAndClose()
+    debug.info(`[main] flushed ${result.pending} clientInfo events on before-quit; ack=${result.flushed}`)
+  } catch (err) {
+    debug.warn(`[main] flushAndClose failed: ${(err as Error).message}`)
+  }
   cleanup('before-quit')
 })
 process.on('uncaughtException', (error) => {

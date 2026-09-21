@@ -36,6 +36,19 @@ import configManager from '../../services/configManager'
 import type { WhisperConfig, WhisperCommand } from '../../services/configManager'
 import type { OscServiceLike } from './osc-types'
 
+// ── OSC module-toggle contract ────────────────────────────────────
+//   EXPERIMENTAL - UNSTABLE - NEEDS LOTS OF TESTING FIRST
+// These addresses let a VRChat avatar parameter directly drive the
+// start/stop state of the Whisper addon. Wire contract:
+//   /avatar/parameters/ARCOSC/Whisper/State   — 0/1 (non-zero truthy) → start, 0/false → stop
+//   /avatar/parameters/ARCOSC/Whisper/AutoStart — 0/1 → flips `whisperAutostart` in config.json
+//
+// Both are registered as local-only in main/index.ts:605 so the
+// ARC-OSC server never sees them. The shape mirrors the pattern
+// future modules (Hyperate, OSCLeash, etc.) will follow when wired.
+export const OSC_ADDRESS_WHISPER_STATE = '/avatar/parameters/ARCOSC/Whisper/State'
+export const OSC_ADDRESS_WHISPER_AUTO_START = '/avatar/parameters/ARCOSC/Whisper/AutoStart'
+
 // ── Public types (consumed by preload + renderer composable) ──────
 
 /**
@@ -81,6 +94,10 @@ export interface WhisperStatusEvent {
   inputDeviceId?: string | null
   inputGain?: number
   minInputLevel?: number
+  // Set true when the most recent start/stop was driven by an
+  // inbound OSC message at ARCOSC/Whisper/State. Surfaced to the
+  // renderer so the Autostart toggle can grey out + show tooltip.
+  oscDriven?: boolean
 }
 
 export interface WhisperResultEvent {
@@ -275,6 +292,18 @@ export class WhisperAddon {
   private currentMinUtteranceMs = 350
   private isRunning = false
   private pendingInitResolve: ((ok: boolean) => void) | null = null
+  // ── OSC-driven module toggle state ──
+  // lastOscState — edge-trigger memory: only act on 0→1 / 1→0
+  // transitions, ignore identical repeats (60Hz avatar spam).
+  // oscDriven — set true the first time a Whisper/State message flips
+  // us; cleared when the user explicitly toggles via UI. Drives the
+  // renderer autostart-toggle grey-out and the startup-autostart
+  // short-circuit guard in main/index.ts:482.
+  // pendingOscStop — when stop() arrives while engineState is
+  // 'stopping' (mid-shutdown), defer until that cycle finishes.
+  private lastOscState: boolean | null = null
+  private oscDriven = false
+  private pendingOscStop = false
   // Monotonically incremented on every start(). The 'exit' handler
   // captures the value at the time it was attached; if a NEW worker
   // is started (and bumps this), the OLD worker's exit-handler
@@ -364,6 +393,168 @@ export class WhisperAddon {
   }
   setLevelCallback(cb: (level: number) => void): void {
     this.onLevel = cb
+  }
+
+  // ── OSC-driven module toggle entry point ──
+  //
+  // Called by main/index.ts:612 inside the single
+  // oscQueryService.on('osc-message', ...) handler, for messages whose
+  // address matches a registered OSC_MODULE_BINDING entry.
+  //
+  // Returns true if the addon recognised the address (regardless of
+  // whether a state-change dispatch happened), false if the address
+  // is not ours. Used by index.ts to decide whether to skip further
+  // downstream consumers (renderer log, WS forward, etc.) — though
+  // currently we leave those on for debug visibility.
+  handleOscState(address: string, rawValue: unknown): boolean {
+    if (address === OSC_ADDRESS_WHISPER_AUTO_START) {
+      const bool = this.coerceBool(rawValue)
+      if (bool === null) {
+        debug.warn(`[whisper] OSC AutoStart ignored — value not coercible: ${JSON.stringify(rawValue)}`)
+        return true
+      }
+      const ok = configManager.updateAppSettings({ whisperAutostart: bool })
+      if (ok) {
+        // ANY explicit /AutoStart message flips oscDriven on so the
+        // renderer autostart toggle greys out — the avatar is now
+        // authoritative for that flag, not the UI toggle.
+        this.oscDriven = true
+        debug.info(`[whisper] OSC AutoStart=${bool}; whisperAutostart persisted, oscDriven=true`)
+        // Push a status with the freshly toggled oscDriven so the
+        // renderer reflects the grey-out immediately (don't wait for
+        // the next start/stop cycle).
+        this.pushStatus()
+      }
+      return true
+    }
+    if (address === OSC_ADDRESS_WHISPER_STATE) {
+      const bool = this.coerceBool(rawValue)
+      if (bool === null) {
+        debug.warn(`[whisper] OSC State ignored — value not coercible: ${JSON.stringify(rawValue)}`)
+        return true
+      }
+      // Edge-trigger: ignore repeats. Without this guard a VRChat
+      // float parameter at 1.0 (continuous) would hammer start() on
+      // every packet — 60Hz spam.
+      if (this.lastOscState === bool) return true
+      this.lastOscState = bool
+      // Once OSC has spoken, treat it as the authoritative driver for
+      // the rest of this app session. The renderer grey-out + main
+      // autostart short-circuit both key off this flag.
+      this.oscDriven = true
+      if (bool) {
+        this.dispatchOscStart()
+      } else {
+        this.dispatchOscStop()
+      }
+      // pushStatus will run as a side-effect of start()/stop() but
+      // also fire one explicitly to reflect oscDriven immediately.
+      this.pushStatus()
+      return true
+    }
+    return false
+  }
+
+  // Exposed for the startup-autostart guard in main/index.ts and for
+  // renderer tooltip copy. Both check `if (whisperAddon.isOscDriven())`.
+  isOscDriven(): boolean {
+    return this.oscDriven
+  }
+
+  // Reset oscDriven when the user explicitly clicks Start/Stop in
+  // the UI (main/index.ts whisper-start/stop handlers call this). The
+  // autostart toggle re-enables and the startup-autostart branch
+  // stops short-circuiting on next launch.
+  clearOscDriven(): void {
+    if (!this.oscDriven) return
+    this.oscDriven = false
+    this.lastOscState = null
+    this.pendingOscStop = false
+    debug.info('[whisper] oscDriven cleared — UI took back control')
+    this.pushStatus()
+  }
+
+  // ── OSC type coercion (whitelist; anything else → null = ignore) ──
+  //
+  // Rationale: VRChat avatar parameters can be sent as bool T/F, int/float
+  // numbers, or stringified equivalents. We accept all six shapes for
+  // true/false but reject garbage values (`/State=NaN`, `/State="hello"`)
+  // with a `null` return so the dispatcher treats it as a no-op rather
+  // than flipping state to false by accident.
+  private coerceBool(value: unknown): boolean | null {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'number') {
+      if (Number.isFinite(value)) return value !== 0
+      return null
+    }
+    if (typeof value === 'string') {
+      const v = value.trim().toLowerCase()
+      if (v === '' || v === '0' || v === 'false' || v === 'off' || v === 'no') return false
+      if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true
+      return null
+    }
+    if (value === null || value === undefined) return false
+    return null
+  }
+
+  private dispatchOscStart(): void {
+    // Already running — idempotent no-op.
+    if (this.isEnabled()) {
+      debug.info('[whisper] OSC /State=1 ignored — already enabled')
+      return
+    }
+    // Engine is mid-cycle (worker spawn, model load, init, or shutdown).
+    // Defer the start: wait for the existing transition to settle, then
+    // retry once. The pending-init safety from start()'s own promise
+    // resolution handles a second call while the first is in-flight
+    // correctly — see start()'s `if (this.isRunning) return true` guard.
+    const inFlight = ['preparing', 'loading-model', 'starting'] as const
+    if ((inFlight as readonly string[]).includes(this.engineState)) {
+      debug.info(`[whisper] OSC /State=1 deferred — engineState=${this.engineState}`)
+      // Schedule a single trailing retry once the in-flight transition
+      // finishes. We don't await here — keep the OSC handler fast.
+      setTimeout(() => {
+        // Re-check: another state may have arrived in the meantime.
+        if (this.lastOscState !== true) return
+        if (this.isEnabled()) return
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this.start(this.oscService as OscServiceLike)
+      }, 250)
+      return
+    }
+    if (this.engineState === 'stopping') {
+      // Don't double-stop; defer until current stop completes. The
+      // exit handler below handles the 'stopped' transition; we poll.
+      debug.info('[whisper] OSC /State=1 deferred — currently stopping')
+      setTimeout(() => {
+        if (this.lastOscState !== true) return
+        if (this.isEnabled()) return
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this.start(this.oscService as OscServiceLike)
+      }, 250)
+      return
+    }
+    // Fire-and-forget. Don't await — keeps the OSC handler synchronous
+    // (the EventEmitter dispatch is sync; start()'s promises resolve
+    // asynchronously and status pushes ride the existing callback).
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this.start(this.oscService as OscServiceLike)
+  }
+
+  private dispatchOscStop(): void {
+    if (!this.isEnabled() && this.engineState !== 'starting' && this.engineState !== 'preparing' && this.engineState !== 'loading-model') {
+      debug.info('[whisper] OSC /State=0 ignored — not enabled')
+      return
+    }
+    if (this.engineState === 'stopping') {
+      // Already stopping — flag the desired final state so that if
+      // a /State=1 arrives during shutdown we don't accidentally
+      // bail out, and if /State=0 arrives again nothing extra fires.
+      this.pendingOscStop = true
+      debug.info('[whisper] OSC /State=0 already in stopping — flagging pendingOscStop')
+      return
+    }
+    this.stop()
   }
 
   setOscService(osc: OscServiceLike): void {
@@ -812,7 +1003,8 @@ export class WhisperAddon {
       bridgePath: this.workerFile,
       inputDeviceId: this.currentInputDeviceId,
       inputGain: this.currentInputGain,
-      minInputLevel: this.currentMinInputLevel
+      minInputLevel: this.currentMinInputLevel,
+      oscDriven: this.oscDriven
     }
   }
 
@@ -1176,7 +1368,8 @@ export class WhisperAddon {
       message: this.lastError,
       inputDeviceId: this.currentInputDeviceId,
       inputGain: this.currentInputGain,
-      minInputLevel: this.currentMinInputLevel
+      minInputLevel: this.currentMinInputLevel,
+      oscDriven: this.oscDriven
     })
   }
 

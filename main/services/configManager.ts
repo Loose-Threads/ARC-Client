@@ -212,6 +212,15 @@ class ConfigManager {
         trackerNames: {},
         trackerStates: {}
       },
+      // Whisper configuration
+      whisper: {
+        modelPath: null,
+        inputDeviceId: null,
+        minInputLevel: 0,
+        inputGain: 1,
+        minUtteranceMs: 350,
+        commands: []
+      },
       // OSCLeash configuration
       oscleash: {
         RunDeadzone: 0.70,
