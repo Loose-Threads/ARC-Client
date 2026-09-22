@@ -1,24 +1,23 @@
 // ====
-// Shared dark-theme observation composable.
-// The app is dark-only; `dark-theme` is permanently set on <body> at boot.
-// This composable still watches the class for any edge case where pages
-// need to apply a class binding reactively (e.g. Hyperate, AutoStatus,
-// OscLeash use the returned `isDarkTheme` flag for dark-specific styling).
+// Reactive theme flag composable.
+// Returns `isDarkTheme` which is always true (the app is dark-only) but
+// kept reactive in case future themes include light palettes. Pages that
+// use it (Hyperate, AutoStatus, OscLeash) get a stable `true` value with no
+// runtime cost beyond an empty MutationObserver hook.
 // ====
 import { onMounted, onUnmounted, ref } from 'vue'
 
 export function useTheme() {
-  const isDarkTheme = ref(false)
+  const isDarkTheme = ref(true)
   let observer: MutationObserver | null = null
   function syncThemeState() {
     if (typeof document === 'undefined') return
-    isDarkTheme.value = document.body.classList.contains('dark-theme')
+    // The app is permanently dark; this is a no-op for now but kept so
+    // the public API doesn't change if a future light theme is added.
+    isDarkTheme.value = true
   }
   function startThemeObserver() {
     syncThemeState()
-    if (typeof document === 'undefined') return
-    observer = new MutationObserver(syncThemeState)
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] })
   }
   function stopThemeObserver() {
     observer?.disconnect()

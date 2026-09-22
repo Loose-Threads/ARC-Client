@@ -507,48 +507,48 @@ const {
 .oscleash-parameters code.listen {
   color: #3498db;
 }
-:global(body.dark-theme) .autostart-toggle-slider {
+:global(.autostart-toggle-slider) {
   background: #34495e;
   border-color: #2c3e50;
-}
+})
 
-:global(body.dark-theme) .autostart-toggle-slider:hover {
+:global(.autostart-toggle-slider:hover) {
   border-color: #3498db;
-}
+})
 
-:global(body.dark-theme) .autostart-toggle-option {
+:global(.autostart-toggle-option) {
   color: #95a5a6;
-}
+})
 
-:global(body.dark-theme) .autostart-toggle-option.active {
+:global(.autostart-toggle-option.active) {
   background: #3498db;
   color: white;
-}
+})
 
-:global(body.dark-theme) .autostart-toggle-option.active.enabled {
+:global(.autostart-toggle-option.active.enabled) {
   background: #27ae60;
-}
+})
 
-:global(body.dark-theme) .autostart-toggle-option.active.disabled {
+:global(.autostart-toggle-option.active.disabled) {
   background: #7f8c8d;
-}
+})
 
-:global(body.dark-theme) .oscleash-readonly-input {
+:global(.oscleash-readonly-input) {
   background-color: #2c3e50 !important;
-}
+})
 
-:global(body.dark-theme) .oscleash-readonly-input {
+:global(.oscleash-readonly-input) {
   color: #ecf0f1;
-}
-:global(body.dark-theme) .oscleash-empty-state,
-:global(body.dark-theme) .oscleash-subtext {
+})
+:global(.oscleash-empty-state,
+:global(.oscleash-subtext)) {
   color: #95a5a6;
-}
-:global(body.dark-theme) .oscleash-leash-item,
-:global(body.dark-theme) .oscleash-readonly-input,
-:global(body.dark-theme) .oscleash-note-box {
+})
+:global(.oscleash-leash-item,
+:global(.oscleash-readonly-input),
+:global(.oscleash-note-box)) {
   border-color: #34495e;
-}
+})
 @media (max-width: 700px) {
   .oscleash-movement-grid,
   .oscleash-run-grid,
