@@ -33,7 +33,6 @@ const {
   
   telemetryEnabled,
   telemetryBusy,
-  isDarkTheme,
   toggleTelemetry,
   onPresetFieldChange,
   toggleDay,

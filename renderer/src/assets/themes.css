@@ -1,0 +1,185 @@
+/* =====================================================================
+ * Design Tokens & Theme System
+ * ---------------------------------------------------------------------
+ * Every visual property of the app is driven by CSS variables defined
+ * here. Themes are preset groups of values applied via [data-theme="..."]
+ * on <body>. User-level customizations (accent color, radius, density,
+ * font scale) override preset values via inline custom properties set on
+ * body, so they survive across preset switches.
+ *
+ * The app is dark-only — every theme is a dark palette. The
+ * `<body class="dark-theme">` class is set permanently at boot so the
+ * scattered `:global(body.dark-theme)` overrides in pages apply always.
+ *
+ * To add a theme:
+ *   1. Add a `:root[data-theme="<name>"]` block below
+ *   2. Override only the tokens you want different
+ *   3. Add the name to the ThemePreset union in useSettings.ts
+ *   4. Add the preset to PRESET_OPTIONS in SettingsPage.ts
+ * ===================================================================== */
+
+:root,
+:root[data-theme="aurora"] {
+    /* --- Surfaces (5 elevation levels) — dark friendly slate --- */
+    --surface-0: #0f1115;
+    --surface-1: #161a22;
+    --surface-2: #1d2129;
+    --surface-3: #252a33;
+    --surface-4: #2c3340;
+
+    /* --- Text (5 contrast levels) --- */
+    --text-primary: #e6edf3;
+    --text-secondary: #b6c0cc;
+    --text-tertiary: #8b95a3;
+    --text-muted: #6b7280;
+    --text-inverse: #0f1115;
+
+    /* --- Borders --- */
+    --border-subtle: #2a2f3a;
+    --border-default: #3a4150;
+    --border-strong: #5a6478;
+
+    /* --- Accent (overridable via settings) --- */
+    --accent: #5dade2;
+    --accent-hover: #7fc1e8;
+    --accent-active: #3d8bbd;
+    --accent-soft: rgba(93, 173, 226, 0.18);
+    --accent-contrast: #0f1115;
+
+    /* --- Status colors --- */
+    --color-success: #4ade80;
+    --color-success-soft: rgba(74, 222, 128, 0.18);
+    --color-warning: #fbbf24;
+    --color-warning-soft: rgba(251, 191, 36, 0.18);
+    --color-danger: #f87171;
+    --color-danger-soft: rgba(248, 113, 113, 0.18);
+    --color-info: #5dade2;
+    --color-info-soft: rgba(93, 173, 226, 0.18);
+
+    /* --- Radii (scaled via --radius-scale) --- */
+    --radius-scale: 1;
+    --radius-sm: calc(4px * var(--radius-scale));
+    --radius-md: calc(8px * var(--radius-scale));
+    --radius-lg: calc(12px * var(--radius-scale));
+    --radius-xl: calc(16px * var(--radius-scale));
+    --radius-pill: 999px;
+
+    /* --- Shadows --- */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+
+    /* --- Spacing (scaled via --density) --- */
+    --density: 1;
+    --space-1: calc(4px * var(--density));
+    --space-2: calc(8px * var(--density));
+    --space-3: calc(12px * var(--density));
+    --space-4: calc(16px * var(--density));
+    --space-5: calc(20px * var(--density));
+    --space-6: calc(24px * var(--density));
+    --space-8: calc(32px * var(--density));
+
+    /* --- Typography --- */
+    --font-scale: 1;
+    --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    --font-display: var(--font-sans);
+    --font-size-base: calc(14px * var(--font-scale));
+    --font-size-sm: calc(12px * var(--font-scale));
+    --font-size-lg: calc(16px * var(--font-scale));
+    --font-size-xl: calc(20px * var(--font-scale));
+    --font-size-display: calc(28px * var(--font-scale));
+    --line-height-base: 1.55;
+
+    /* --- Body / app shell --- */
+    --app-bg:
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.22) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.18) 0px, transparent 50%),
+        linear-gradient(180deg, #0c0e15 0%, #14171f 100%);
+    --app-bg-solid: #0f1115;
+    --sidebar-bg: #161a22;
+    --sidebar-text: #e6edf3;
+    --sidebar-text-muted: #8b95a3;
+    --sidebar-section-border: #2a2f3a;
+    --main-bg: transparent;
+    --main-text: var(--text-primary);
+
+    /* --- Code/log blocks --- */
+    --code-bg: #0a0a0a;
+    --code-text: #00ff9c;
+
+    /* --- Effects --- */
+    --backdrop-blur: 0px;
+    --card-translucent: 0;
+    --hairline: 1px;
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 400ms ease;
+
+    /* --- Form inputs --- */
+    --input-bg: var(--surface-2);
+    --input-border: var(--border-default);
+    --input-focus-border: var(--accent);
+    --input-text: var(--text-primary);
+    --input-placeholder: var(--text-muted);
+
+    /* --- Buttons --- */
+    --btn-text: #0f1115;
+    --btn-secondary-bg: #4a5160;
+    --btn-secondary-hover: #5a6478;
+
+    /* --- Scrollbar --- */
+    --scrollbar-track: #1d2129;
+    --scrollbar-thumb: #5a6478;
+    --scrollbar-thumb-hover: var(--accent);
+
+    color-scheme: dark;
+}
+
+/* =====================================================================
+ * Aurora Soft — Theme-specific polish
+ * ---------------------------------------------------------------------
+ * Dark, friendly, modern flat. Soft shadows, gentle radii, Inter font
+ * preference, slight bump to line-height for comfortable reading.
+ * ===================================================================== */
+:root[data-theme="aurora"] {
+    --radius-md: calc(10px * var(--radius-scale));
+    --radius-lg: calc(14px * var(--radius-scale));
+    --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.55);
+    --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    --line-height-base: 1.6;
+}
+
+/* =====================================================================
+ * Density modifiers
+ * ===================================================================== */
+:root[data-density="compact"] {
+    --density: 0.75;
+}
+:root[data-density="comfortable"] {
+    --density: 1.1;
+}
+
+/* =====================================================================
+ * Font scale modifiers
+ * ===================================================================== */
+:root[data-font-scale="large"] {
+    --font-scale: 1.1;
+}
+:root[data-font-scale="compact"] {
+    --font-scale: 0.92;
+}
+
+/* =====================================================================
+ * Reduced motion
+ * ===================================================================== */
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+}
