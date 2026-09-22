@@ -6,9 +6,9 @@
  * tokens; this file provides the structural rules and references tokens
  * for colors, spacing, radii, shadows, etc.
  *
- * The app is dark-only now (every theme is a dark palette). The
- * `<body class="dark-theme">` class is set permanently at boot so the
- * scattered `:global(body.dark-theme)` overrides in pages apply always.
+ * The app is dark-only (every theme is a dark palette). Themes own the
+ * entire visual via [data-theme="..."] on <html>; HTML never sets a
+ * dark/light class. The renderer fully owns theming.
  * ===================================================================== */
 
 * {
@@ -1027,48 +1027,42 @@ body {
 .navigation-section .btn {
     transition: all var(--transition-fast);
     text-transform: none;
+    /* Nav buttons are NOT primary CTAs — softer look, no big glow, no sheen */
+    box-shadow: none;
 }
 
-/* Nav buttons get a slightly punchier gradient + a permanent soft glow */
+/* Nav buttons get a calmer solid-fill look (no 135° gradient sheen, no
+   big halo glow). They still lift slightly on hover but stay secondary. */
 .navigation-section .btn-primary {
-    background-image: linear-gradient(
-        135deg,
-        var(--accent) 0%,
-        var(--accent-hover) 50%,
-        var(--accent) 100%
-    );
-    box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-        0 0 14px color-mix(in srgb, var(--accent) 35%, transparent),
-        0 2px 6px rgba(0, 0, 0, 0.3);
+    background: var(--accent);
+    background-image: none;
+    box-shadow: none;
     letter-spacing: 0.04em;
 }
 
 .navigation-section .btn:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.15) inset,
-        0 0 28px color-mix(in srgb, var(--accent) 60%, transparent),
-        0 8px 20px color-mix(in srgb, var(--accent) 35%, transparent);
-    filter: saturate(1.15) brightness(1.08);
+        0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+        0 4px 10px rgba(0, 0, 0, 0.35);
+    filter: brightness(1.1);
 }
 
 .navigation-section .btn.active,
 .navigation-section .btn:disabled {
     background-color: var(--color-success);
-    background-image: linear-gradient(
-        135deg,
-        var(--color-success) 0%,
-        color-mix(in srgb, var(--color-success) 70%, white) 50%,
-        var(--color-success) 100%
-    );
+    background-image: none;
     color: var(--text-inverse);
     cursor: default;
     box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.1) inset,
-        0 0 18px color-mix(in srgb, var(--color-success) 45%, transparent),
-        0 2px 8px rgba(0, 0, 0, 0.25);
-    opacity: 0.95;
+        0 0 0 1px color-mix(in srgb, var(--color-success) 40%, transparent),
+        0 2px 6px rgba(0, 0, 0, 0.25);
+    opacity: 0.92;
+}
+
+/* Disable the .btn::after sheen sweep on nav buttons — they're nav, not CTAs */
+.navigation-section .btn::after {
+    display: none;
 }
 
 .dropdown {
