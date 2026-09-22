@@ -32,7 +32,7 @@ export interface AppearanceSettings {
 }
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
-    preset: 'aurora',
+    preset: 'gothic-purple',
     density: 'default',
     fontScale: 'default',
     accent: '',
