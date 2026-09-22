@@ -1,5 +1,5 @@
 import './bootstrap' // MUST be first — sets userData path before service constructors
-import { app, BrowserWindow, ipcMain, dialog, session, shell, clipboard } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, session, shell, clipboard, Menu } from 'electron'
 import path from 'node:path'
 import { encryptData, decryptData } from './services/encryption'
 import osc from 'osc'
@@ -130,6 +130,50 @@ function createWindow() {
     }, Math.max(0, minSplashTime - (Date.now() - startTime)))
   })
   mainWindow.setMenuBarVisibility(false)
+  // Restore the default right-click context menu in the renderer so
+  // users can copy/paste, spell-check, and inspect elements as usual.
+  // Without this handler, modern Electron versions suppress the menu
+  // (especially with contextIsolation: true).
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const isText = params.isEditable || (params.selectionText && params.selectionText.length > 0)
+    const template: Electron.MenuItemConstructorOptions[] = []
+
+    if (isText) {
+      template.push(
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { type: 'separator' }
+      )
+      if (params.editFlags.canCopy) {
+        template.push({ role: 'copy' })
+      }
+      if (params.editFlags.canPaste) {
+        template.push({ role: 'paste' })
+      }
+      if (params.editFlags.canSelectAll) {
+        template.push({ role: 'selectAll' })
+      }
+      template.push({ type: 'separator' })
+    }
+
+    if (params.linkURL) {
+      template.push({
+        label: 'Open Link in Browser',
+        click: () => { shell.openExternal(params.linkURL) }
+      })
+      template.push({ role: 'copyLink' })
+      template.push({ type: 'separator' })
+    }
+
+    template.push({ role: 'reload' })
+    template.push({ role: 'toggleDevTools' })
+
+    if (template.length > 0) {
+      const menu = Menu.buildFromTemplate(template)
+      menu.popup({ window: mainWindow! })
+    }
+  })
   // Add security for VRC Timeline webview
   mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
     // Set secure CSP for the webview

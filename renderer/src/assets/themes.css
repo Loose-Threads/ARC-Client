@@ -3,13 +3,13 @@
  * ---------------------------------------------------------------------
  * Every visual property of the app is driven by CSS variables defined
  * here. Themes are preset groups of values applied via [data-theme="..."]
- * on <body>. User-level customizations (accent color, radius, density,
+ * on <html>. User-level customizations (accent color, radius, density,
  * font scale) override preset values via inline custom properties set on
- * body, so they survive across preset switches.
+ * <html>, so they survive across preset switches.
  *
- * The app is dark-only — every theme is a dark palette. The
- * `<body class="dark-theme">` class is set permanently at boot so the
- * scattered `:global(body.dark-theme)` overrides in pages apply always.
+ * The app is dark-only — every theme is a dark palette. Themes own the
+ * entire visual; HTML does not set any dark/light class on <body>. The
+ * renderer fully owns theming.
  *
  * To add a theme:
  *   1. Add a `:root[data-theme="<name>"]` block below
