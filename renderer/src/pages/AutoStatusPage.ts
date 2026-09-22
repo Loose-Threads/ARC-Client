@@ -10,7 +10,6 @@ import { useAutoStatus, STATUS_TYPES, DAY_LABELS } from '../composables/useAutoS
 import type { Preset, ScheduleEntry } from '../composables/useAutoStatus'
 import { useServerConnection } from '../composables/useServerConnection'
 import { useElectronAPI } from '../composables/useElectronAPI'
-import { useTheme } from '../composables/useTheme'
 
 export function createAutoStatusPageState() {
   const {
@@ -59,7 +58,6 @@ export function createAutoStatusPageState() {
   const telemetryEnabled = ref(true)
   const telemetryBusy = ref(false)
   const autostatusApi = useElectronAPI()
-  const { isDarkTheme } = useTheme()
   async function toggleTelemetry() {
     if (telemetryBusy.value) return
     telemetryBusy.value = true
@@ -182,7 +180,6 @@ export function createAutoStatusPageState() {
     editingScheduleName,
     telemetryEnabled,
     telemetryBusy,
-    isDarkTheme,
     // handlers
     toggleTelemetry,
     onPresetFieldChange,
