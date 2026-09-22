@@ -60,7 +60,7 @@ function clearClientLogs() {
     <div class="card">
       <h3>Client Logs</h3>
       <div ref="debugRef" class="log-container">
-        <div v-if="debugEntries.length === 0" style="color: #00ff00">
+        <div v-if="debugEntries.length === 0" style="color: var(--code-text);">
           Welcome to ARC-OSC Client<br>
           Configure your settings and connect to get started
         </div>
@@ -75,7 +75,7 @@ function clearClientLogs() {
       <h3>OSC Received</h3>
       <div ref="receivedRef" class="log-container">
         <div v-if="receivedLogs.length === 0">No OSC data received yet</div>
-        <div v-for="(entry, i) in receivedLogs" :key="i" style="color: #00ff00">
+        <div v-for="(entry, i) in receivedLogs" :key="i" style="color: var(--code-text);">
           [{{ formatClientTime(entry.timestamp) }}] {{ entry.address }} = {{ formatValue(entry.value) }}
         </div>
       </div>
@@ -86,7 +86,7 @@ function clearClientLogs() {
       <h3>OSC Received (from ARC Server)</h3>
       <div ref="arcRef" class="log-container">
         <div v-if="arcReceivedLogs.length === 0">No OSC data received from ARC Server yet</div>
-        <div v-for="(entry, i) in arcReceivedLogs" :key="i" style="color: #ff8c00">
+        <div v-for="(entry, i) in arcReceivedLogs" :key="i" style="color: var(--color-warning);">
           [{{ formatClientTime(entry.timestamp) }}] {{ entry.address }} = {{ formatValue(entry.value) }}
         </div>
       </div>
@@ -97,7 +97,7 @@ function clearClientLogs() {
       <h3>OSC Forwarded (to ARC Server)</h3>
       <div ref="forwardedRef" class="log-container">
         <div v-if="forwardedLogs.length === 0">No OSC data forwarded yet</div>
-        <div v-for="(entry, i) in forwardedLogs" :key="i" style="color: #00aaff">
+        <div v-for="(entry, i) in forwardedLogs" :key="i" style="color: var(--color-info);">
           [{{ formatClientTime(entry.timestamp) }}] {{ entry.address }} = {{ formatValue(entry.value) }}
         </div>
       </div>

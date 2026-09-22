@@ -31,7 +31,7 @@ const {
     </div>
 
     <div v-if="error" class="card">
-      <p style="color: #e74c3c;">{{ error }}</p>
+      <p style="color: var(--color-danger);">{{ error }}</p>
     </div>
 
     <div class="card feedback-section">
@@ -55,12 +55,12 @@ const {
       <div class="form-group">
         <label for="feedback-title">Title</label>
         <input id="feedback-title" v-model="submitTitle" type="text" maxlength="100" placeholder="Brief summary of your feedback" />
-        <small style="color: #666;">Max 100 characters</small>
+        <small style="color: var(--text-tertiary);">Max 100 characters</small>
       </div>
       <div class="form-group">
         <label for="feedback-description">Description</label>
         <textarea id="feedback-description" v-model="submitDescription" class="feedback-textarea" maxlength="2000" rows="6" placeholder="Provide detailed information about your feedback..."></textarea>
-        <small style="color: #666;">Max 2000 characters - <span id="feedback-char-count">{{ descriptionChars }}</span>/2000</small>
+        <small style="color: var(--text-tertiary);">Max 2000 characters - <span id="feedback-char-count">{{ descriptionChars }}</span>/2000</small>
       </div>
       <div style="display: flex; gap: 10px; margin-top: 15px;">
         <button class="btn btn-primary" type="button" :disabled="submitting || !submitTitle.trim() || !submitDescription.trim()" @click="submit">
@@ -79,23 +79,23 @@ const {
       <h3>Your Feedback Statistics</h3>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
         <div style="text-align: center; padding: 15px; background: rgba(52, 152, 219, 0.1); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.3);">
-          <div style="font-size: 24px; font-weight: bold; color: #3498db;">{{ userStats.total }}</div>
+          <div style="font-size: 24px; font-weight: bold; color: var(--color-info);">{{ userStats.total }}</div>
           <div style="font-size: 12px; opacity: 0.8; margin-top: 5px;">Total Submitted</div>
         </div>
         <div style="text-align: center; padding: 15px; background: rgba(46, 204, 113, 0.1); border-radius: 8px; border: 1px solid rgba(46, 204, 113, 0.3);">
-          <div style="font-size: 24px; font-weight: bold; color: #2ecc71;">{{ userStats.feature }}</div>
+          <div style="font-size: 24px; font-weight: bold; color: var(--color-success);">{{ userStats.feature }}</div>
           <div style="font-size: 12px; opacity: 0.8; margin-top: 5px;">Feature Requests</div>
         </div>
         <div style="text-align: center; padding: 15px; background: rgba(231, 76, 60, 0.1); border-radius: 8px; border: 1px solid rgba(231, 76, 60, 0.3);">
-          <div style="font-size: 24px; font-weight: bold; color: #e74c3c;">{{ userStats.bug }}</div>
+          <div style="font-size: 24px; font-weight: bold; color: var(--color-danger);">{{ userStats.bug }}</div>
           <div style="font-size: 12px; opacity: 0.8; margin-top: 5px;">Bug Reports</div>
         </div>
         <div style="text-align: center; padding: 15px; background: rgba(241, 196, 15, 0.1); border-radius: 8px; border: 1px solid rgba(241, 196, 15, 0.3);">
-          <div style="font-size: 24px; font-weight: bold; color: #f1c40f;">{{ userStats.improvement }}</div>
+          <div style="font-size: 24px; font-weight: bold; color: var(--color-warning);">{{ userStats.improvement }}</div>
           <div style="font-size: 12px; opacity: 0.8; margin-top: 5px;">Improvements</div>
         </div>
         <div style="text-align: center; padding: 15px; background: rgba(155, 89, 182, 0.1); border-radius: 8px; border: 1px solid rgba(155, 89, 182, 0.3);">
-          <div style="font-size: 24px; font-weight: bold; color: #9b59b6;">{{ userStats.other }}</div>
+          <div style="font-size: 24px; font-weight: bold; color: var(--accent-active);">{{ userStats.other }}</div>
           <div style="font-size: 12px; opacity: 0.8; margin-top: 5px;">Other</div>
         </div>
       </div>
@@ -128,7 +128,7 @@ const {
         </div>
       </div>
 
-      <div v-if="filteredList.length === 0" style="text-align: center; padding: 40px; color: #666;">
+      <div v-if="filteredList.length === 0" style="text-align: center; padding: 40px; color: var(--text-tertiary);">
         <p>No feedback items found.</p>
       </div>
 
