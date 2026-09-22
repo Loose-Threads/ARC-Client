@@ -153,6 +153,256 @@
 }
 
 /* =====================================================================
+ * Theme: Gothic Crimson
+ * ---------------------------------------------------------------------
+ * Velvet blacks and oxblood reds with rich gold highlights. Inspired by
+ * gothic cathedral aesthetics and high-contrast crimson typography.
+ * Vibrant accent (saturated red) with subtle blood-glow on focus.
+ * ===================================================================== */
+:root[data-theme="gothic"] {
+    /* Surfaces — deep velvet blacks */
+    --surface-0: #0a0608;
+    --surface-1: #14090c;
+    --surface-2: #1c0e12;
+    --surface-3: #26141a;
+    --surface-4: #321b22;
+
+    /* Text — bone whites with crimson tints */
+    --text-primary: #f5e8e6;
+    --text-secondary: #c8a8a3;
+    --text-tertiary: #8a6560;
+    --text-muted: #5e3e3a;
+    --text-inverse: #14090c;
+
+    /* Borders — deep wine lines */
+    --border-subtle: #2a1518;
+    --border-default: #3d1f23;
+    --border-strong: #6b2e34;
+
+    /* Accent — vibrant blood crimson */
+    --accent: #dc143c;
+    --accent-hover: #ff2d55;
+    --accent-active: #a8102e;
+    --accent-soft: rgba(220, 20, 60, 0.22);
+    --accent-contrast: #fff5f3;
+
+    /* Status — gilded + jewel tones */
+    --color-success: #50c878;
+    --color-success-soft: rgba(80, 200, 120, 0.18);
+    --color-warning: #ffb000;
+    --color-warning-soft: rgba(255, 176, 0, 0.18);
+    --color-danger: #ff0044;
+    --color-danger-soft: rgba(255, 0, 68, 0.22);
+    --color-info: #d4af37;
+    --color-info-soft: rgba(212, 175, 55, 0.18);
+
+    /* Radii — soft curves */
+    --radius-sm: calc(4px * var(--radius-scale));
+    --radius-md: calc(8px * var(--radius-scale));
+    --radius-lg: calc(12px * var(--radius-scale));
+    --radius-xl: calc(16px * var(--radius-scale));
+
+    /* Shadows — crimson-tinted */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 8px rgba(220, 20, 60, 0.05);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 18px rgba(220, 20, 60, 0.1);
+    --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 32px rgba(220, 20, 60, 0.15);
+    --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+
+    /* Background — gothic cathedral gradient */
+    --app-bg:
+        radial-gradient(ellipse at 20% 0%, rgba(220, 20, 60, 0.22) 0px, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(139, 0, 0, 0.28) 0px, transparent 55%),
+        radial-gradient(circle at 50% 50%, rgba(60, 0, 12, 0.4) 0px, transparent 70%),
+        linear-gradient(180deg, #0a0608 0%, #14090c 50%, #0a0608 100%);
+    --app-bg-solid: #0a0608;
+
+    /* Sidebar — wine-stained parchment */
+    --sidebar-bg: #14090c;
+    --sidebar-text: #f5e8e6;
+    --sidebar-text-muted: #8a6560;
+    --sidebar-section-border: #6b2e34;
+    --main-bg: transparent;
+    --main-text: var(--text-primary);
+
+    /* Code — deep obsidian with crimson */
+    --code-bg: #050203;
+    --code-text: #ff2d55;
+
+    /* Effects */
+    --backdrop-blur: 0px;
+    --card-translucent: 0;
+    --hairline: 1px;
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 400ms ease;
+
+    /* Inputs */
+    --input-bg: var(--surface-2);
+    --input-border: var(--border-default);
+    --input-focus-border: var(--accent);
+    --input-text: var(--text-primary);
+    --input-placeholder: var(--text-muted);
+
+    /* Buttons */
+    --btn-text: #fff5f3;
+    --btn-secondary-bg: #3d1f23;
+    --btn-secondary-hover: #6b2e34;
+
+    /* Scrollbar */
+    --scrollbar-track: #14090c;
+    --scrollbar-thumb: #6b2e34;
+    --scrollbar-thumb-hover: var(--accent);
+
+    /* Typography — elegant serifs for display */
+    --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    --font-display: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
+    --font-size-display: calc(34px * var(--font-scale));
+
+    color-scheme: dark;
+}
+
+/* =====================================================================
+ * Gothic Crimson — Theme-specific polish
+ * ---------------------------------------------------------------------
+ * Ornate section headings with fleur-de-lis bullets, glowing red focus
+ * rings, blood-pulse on hover for accent buttons, uppercase labels.
+ * ===================================================================== */
+:root[data-theme="gothic"] {
+    --shadow-md:
+        0 6px 20px rgba(0, 0, 0, 0.65),
+        0 0 24px rgba(220, 20, 60, 0.18),
+        inset 0 1px 0 rgba(220, 20, 60, 0.06);
+    --shadow-lg:
+        0 16px 40px rgba(0, 0, 0, 0.75),
+        0 0 48px rgba(220, 20, 60, 0.25),
+        inset 0 1px 0 rgba(220, 20, 60, 0.08);
+    --font-sans: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
+    --line-height-base: 1.5;
+}
+
+/* Section heading ornaments */
+:root[data-theme="gothic"] .card h3 {
+    border-bottom: 1px solid var(--border-default);
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-5);
+    letter-spacing: 0.04em;
+}
+:root[data-theme="gothic"] .card h3::before {
+    content: "\u2767  ";
+    color: var(--accent);
+    opacity: 0.85;
+}
+:root[data-theme="gothic"] .sidebar-section h3::before {
+    content: "\u2756  ";
+    color: var(--accent);
+    margin-right: 4px;
+}
+:root[data-theme="gothic"] .sidebar-section h3 {
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Dramatic page title */
+:root[data-theme="gothic"] .header h1 {
+    font-family: var(--font-display);
+    font-size: calc(40px * var(--font-scale));
+    letter-spacing: 0.06em;
+    text-align: center;
+    color: var(--accent);
+    text-shadow:
+        0 0 18px rgba(220, 20, 60, 0.45),
+        0 2px 0 rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="gothic"] .header p {
+    color: var(--text-secondary);
+    font-style: italic;
+    letter-spacing: 0.03em;
+}
+
+/* Blood-glow focus rings */
+:root[data-theme="gothic"] .form-group input:focus,
+:root[data-theme="gothic"] .form-group select:focus,
+:root[data-theme="gothic"] .form-group textarea:focus,
+:root[data-theme="gothic"] .autostatus-field input:focus,
+:root[data-theme="gothic"] .autostatus-field select:focus {
+    box-shadow:
+        0 0 0 3px var(--accent-soft),
+        0 0 18px rgba(220, 20, 60, 0.35);
+    border-color: var(--accent);
+}
+
+/* Primary buttons: crimson box-shadow halo + hover lift + glow */
+:root[data-theme="gothic"] .btn-primary {
+    box-shadow: 0 0 0 1px rgba(220, 20, 60, 0.4), 0 4px 12px rgba(220, 20, 60, 0.25);
+    transition: background-color var(--transition-fast),
+                box-shadow var(--transition-base),
+                transform var(--transition-fast);
+}
+:root[data-theme="gothic"] .btn-primary:hover {
+    box-shadow:
+        0 0 0 1px var(--accent),
+        0 0 24px rgba(220, 20, 60, 0.6),
+        0 4px 16px rgba(220, 20, 60, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Danger buttons: deeper crimson */
+:root[data-theme="gothic"] .btn-danger {
+    background: #8b0000;
+    box-shadow: 0 0 18px rgba(139, 0, 0, 0.45);
+}
+
+/* Sidebar crimson accent */
+:root[data-theme="gothic"] .sidebar {
+    border-right: 1px solid var(--border-default);
+    box-shadow: 1px 0 18px rgba(220, 20, 60, 0.1);
+}
+
+/* Vignette overlay */
+:root[data-theme="gothic"] body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 35%,
+        rgba(20, 0, 0, 0.5) 100%
+    );
+}
+
+/* Uppercase + tracking labels */
+:root[data-theme="gothic"] .form-group label,
+:root[data-theme="gothic"] .panel-stat-label,
+:root[data-theme="gothic"] .access-indicator,
+:root[data-theme="gothic"] .badge,
+:root[data-theme="gothic"] .safety-label,
+:root[data-theme="gothic"] .description-text {
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+}
+
+/* Card borders with hairline crimson */
+:root[data-theme="gothic"] .card,
+:root[data-theme="gothic"] .panel-card,
+:root[data-theme="gothic"] .ogb-device-card {
+    border-color: rgba(107, 46, 52, 0.45);
+}
+
+/* Status indicator glows */
+:root[data-theme="gothic"] .status-connected {
+    background-color: var(--color-success);
+    box-shadow: 0 0 12px var(--color-success-soft);
+}
+:root[data-theme="gothic"] .status-disconnected {
+    background-color: var(--color-danger);
+    box-shadow: 0 0 12px var(--color-danger-soft);
+}
+
+/* =====================================================================
  * Density modifiers
  * ===================================================================== */
 :root[data-density="compact"] {
