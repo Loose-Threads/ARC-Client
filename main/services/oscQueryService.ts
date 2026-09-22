@@ -18,6 +18,7 @@ import osc from 'osc'
 import https from 'node:https'
 import { URL } from 'node:url'
 import os from 'node:os'
+import debug from './debugger.js'
 
 const OSCQAccess = {
     NO_VALUE: 0,
@@ -625,12 +626,28 @@ class OSCQueryService extends EventEmitter {
             // OSC data will be received through the main OSC Query port instead
             console.log('[OSCQuery] VRChat port 9001 listener disabled - using OSC Query port for all communication')
             // Initialize Bonjour for mDNS
-            const bonjourOpts: Record<string, string> = {}
+            //
+            // The `interface` option tells `multicast-dns` which network
+            // interface(s) to join the 224.0.0.251 multicast group on. If
+            // we pass nothing, it falls back to `defaultInterface()` which
+            // on Windows returns the first non-loopback IPv4 (e.g. the LAN
+            // adapter IP). That means our browser never sees mDNS
+            // advertisements published on the loopback interface — which
+            // is exactly where VRChat publishes when it's running on the
+            // same machine as ARC-Client. We always include 127.0.0.1 so
+            // loopback mDNS is visible, and additionally include the
+            // user's bindAddress (or all detected LAN interfaces when
+            // bindAddress is 0.0.0.0) for remote VRChat setups.
+            const bonjourOpts: Record<string, string | string[]> = {}
+            const mdnInterfaces: string[] = ['127.0.0.1']
             if (this.bindAddress && this.bindAddress !== DEFAULT_FALLBACK_ADDRESS) {
-                // Bind mDNS to specific interface when user specified one
-                bonjourOpts.interface = this.bindAddress
-                console.log(`[OSCQuery] Binding mDNS to interface: ${this.bindAddress}`)
+                if (!mdnInterfaces.includes(this.bindAddress)) {
+                    mdnInterfaces.push(this.bindAddress)
+                }
             }
+            bonjourOpts.interface = mdnInterfaces
+            console.log(`[OSCQuery] Binding mDNS to interfaces: ${mdnInterfaces.join(', ')}`)
+            debug.info(`[OSCQuery] Bonjour interface list: ${JSON.stringify(mdnInterfaces)}`)
             this.bonjour = new Bonjour(bonjourOpts)
             // Advertise service via mDNS with error handling for name conflicts.
             //
@@ -678,11 +695,19 @@ class OSCQueryService extends EventEmitter {
                         }
                         // Wait a moment for cleanup
                         await new Promise(resolve => setTimeout(resolve, 500))
-                        // Reinitialize and retry
-                        const retryBonjourOpts: Record<string, string> = {}
+                        // Reinitialize and retry with the same interface list
+                        // as the primary path (includes 127.0.0.1 for loopback
+                        // mDNS visibility — see comment above the primary
+                        // bonjour construction for the full rationale).
+                        const retryBonjourOpts: Record<string, string | string[]> = {}
+                        const retryInterfaces: string[] = ['127.0.0.1']
                         if (this.bindAddress && this.bindAddress !== DEFAULT_FALLBACK_ADDRESS) {
-                            retryBonjourOpts.interface = this.bindAddress
+                            if (!retryInterfaces.includes(this.bindAddress)) {
+                                retryInterfaces.push(this.bindAddress)
+                            }
                         }
+                        retryBonjourOpts.interface = retryInterfaces
+                        debug.info(`[OSCQuery] Retry Bonjour interface list: ${JSON.stringify(retryInterfaces)}`)
                         this.bonjour = new Bonjour(retryBonjourOpts)
                         this.bonjourService = this.bonjour.publish({
                             name: this.appName,
@@ -751,18 +776,22 @@ class OSCQueryService extends EventEmitter {
      * Trigger mDNS discovery to wake up VRChat
      */
     triggerDiscovery(): void {
+        debug.info('[OSCQuery] triggerDiscovery() called')
         if (!this.bonjour) {
             console.log('[OSCQuery] Bonjour not initialized, skipping discovery trigger')
+            debug.warn('[OSCQuery] Bonjour not initialized, skipping discovery trigger')
             return
         }
         // Perform a brief scan to wake up the network
         const browser = this.bonjour.find({ type: 'oscjson' }, (service) => {
-            // Service found (silent)
+            debug.info(`[OSCQuery] triggerDiscovery() saw: ${service.name || 'unnamed'} @ ${service.host || '?'}:${service.port || '?'}`)
         })
+        debug.info('[OSCQuery] One-shot discovery browser started')
         // Stop discovery after 1 second
         setTimeout(() => {
             try {
                 browser.stop()
+                debug.info('[OSCQuery] One-shot discovery browser stopped')
             } catch (error) {
                 // Ignore errors during cleanup
             }
@@ -777,22 +806,32 @@ class OSCQueryService extends EventEmitter {
         // Clear any existing discovery setup
         this._stopVRChatDiscovery()
         console.log('[OSCQuery] Starting continuous VRChat discovery with long-lived browser...')
+        debug.info('[OSCQuery] Starting continuous VRChat discovery with long-lived browser...')
         // Create a persistent browser that listens for service changes
         try {
             this._persistentBrowser = this.bonjour!.find({ type: 'oscjson' })
-            // Handle service discovery (service appears)
+            debug.info('[OSCQuery] Persistent browser created (type=oscjson)')
+            // Handle service discovery (service appears). We log every
+            // service name the browser sees (not just VRChat-Client-*) so
+            // future debugging can confirm whether mDNS packets are being
+            // received at all — the loopback-vs-LAN interface mismatch was
+            // previously silent and made this impossible to diagnose.
             this._persistentBrowser.on('up', async (service) => {
                 if (!this.isRunning) return
+                debug.info(`[OSCQuery] mDNS 'up' event: ${service.name || 'unnamed'} @ ${service.host || '?'}:${service.port || '?'} (referer=${service.referer?.address || '?'})`)
                 await this._handleServiceDiscovered(service)
             })
             // Handle service removal (service disappears)
             this._persistentBrowser.on('down', (service) => {
                 if (!this.isRunning) return
+                debug.info(`[OSCQuery] mDNS 'down' event: ${service.name || 'unnamed'}`)
                 this._handleServiceRemoved(service)
             })
             console.log('[OSCQuery] Long-lived browser started')
+            debug.info('[OSCQuery] Long-lived browser started')
         } catch (error) {
             console.error('[OSCQuery] Failed to start long-lived browser:', error)
+            debug.error(`[OSCQuery] Failed to start long-lived browser: ${(error as Error).message}`)
         }
         // Also run periodic liveness checks every 5 seconds
         // This catches cases where mDNS doesn't fire 'down' events properly
@@ -962,10 +1001,12 @@ class OSCQueryService extends EventEmitter {
     _startReAdvertiseTimer(): void {
         this._stopReAdvertiseTimer()
         console.log(`[OSCQuery] Starting periodic re-advertisement (every ${this.READVERTISE_INTERVAL / 1000}s)`)
+        debug.info(`[OSCQuery] Starting periodic re-advertisement (every ${this.READVERTISE_INTERVAL / 1000}s)`)
         this._reAdvertiseInterval = setInterval(() => {
             if (this.isRunning && this.bonjour) {
                 // Trigger a discovery scan to "wake up" the network
                 // This helps Windows see our service after mDNS cache expires
+                debug.info('[OSCQuery] Periodic re-advertisement tick')
                 this.triggerDiscovery()
             }
         }, this.READVERTISE_INTERVAL)
@@ -990,6 +1031,7 @@ class OSCQueryService extends EventEmitter {
         // Initialize last message time
         this._lastOscMessageTime = null
         console.log('[OSCQuery] Starting OSC data flow monitoring')
+        debug.info('[OSCQuery] Starting OSC data flow monitoring')
         this._oscFlowMonitorInterval = setInterval(() => {
             if (!this.isRunning || !this._currentVRChatOscQueryAddress) {
                 return; // Not connected, nothing to monitor
