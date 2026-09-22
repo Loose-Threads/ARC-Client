@@ -287,20 +287,20 @@ const {
 .os-log-msg { font-size: 13px; color: #333; line-height: 1.4; }
 .os-log-error { font-size: 12px; color: #e74c3c; margin-top: 4px; }
 .os-log-time { font-size: 11px; color: #95a5a6; margin-top: 4px; }
-:global(body.dark-theme .os-banner-connected) { background: linear-gradient(135deg, #1a252f 0%, #1e7e34 100%); }
-:global(body.dark-theme .os-banner-disconnected) { background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%); }
-:global(body.dark-theme .os-tabs) { border-bottom-color: #444; }
-:global(body.dark-theme .os-tab) { color: #7f8c8d; }
-:global(body.dark-theme .os-tab:hover) { color: #ecf0f1; }
-:global(body.dark-theme .os-tab.active) { color: #5dade2; border-bottom-color: #5dade2; }
-:global(body.dark-theme .os-shocker-card) { background: #2a2a2a; border-color: #444; }
-:global(body.dark-theme .os-shocker-card:hover) { border-color: #666; }
-:global(body.dark-theme .os-shocker-selected) { border-color: #5dade2; background: #1a2a3a; }
-:global(body.dark-theme .os-shocker-name) { color: #ecf0f1; }
-:global(body.dark-theme .os-section-header h3) { color: #ecf0f1; }
-:global(body.dark-theme .os-error-banner) { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
-:global(body.dark-theme .os-hint code) { background: #444; color: #ecf0f1; }
-:global(body.dark-theme .os-log-entry) { background: #2a2a2a; border-color: #444; }
-:global(body.dark-theme .os-log-msg) { color: #ddd; }
+:global() { background: linear-gradient(135deg, #1a252f 0%, #1e7e34 100%); })
+:global() { background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%); })
+:global() { border-bottom-color: #444; })
+:global() { color: #7f8c8d; })
+:global() { color: #ecf0f1; })
+:global() { color: #5dade2; border-bottom-color: #5dade2; })
+:global() { background: #2a2a2a; border-color: #444; })
+:global() { border-color: #666; })
+:global() { border-color: #5dade2; background: #1a2a3a; })
+:global() { color: #ecf0f1; })
+:global() { color: #ecf0f1; })
+:global() { background: rgba(231, 76, 60, 0.15); color: #e74c3c; })
+:global() { background: #444; color: #ecf0f1; })
+:global() { background: #2a2a2a; border-color: #444; })
+:global() { color: #ddd; })
 </style>
 

@@ -143,25 +143,25 @@ const {
   margin-top: 5px;
 }
 
-:global(body.dark-theme .vrchatapi-stats-section) {
+:global() {
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme .vrchatapi-user-id) {
+:global() {
   color: #95a5a6;
-}
+})
 
-:global(body.dark-theme .vrchatapi-stat-card) {
+:global() {
   background: #353535 !important;
   border-color: #454545 !important;
   color: #ecf0f1 !important;
-}
+})
 
-:global(body.dark-theme .vrchatapi-stat-value) {
+:global() {
   color: #5dade2;
-}
+})
 
-:global(body.dark-theme .vrchatapi-stat-label) {
+:global() {
   color: #bdc3c7;
-}
+})
 </style>
