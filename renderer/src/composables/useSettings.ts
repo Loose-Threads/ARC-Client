@@ -12,21 +12,18 @@ const SERVER_URLS: Record<ServerType, string> = {
 
 const serverUrl = ref('wss://arcosc.app:48255')
 const activeServer = ref<ServerType>('live')
-const theme = ref<'light' | 'dark'>('light')
 const snowEnabled = ref(true)
 const logLevel = ref('info')
 const clientVersion = ref('')
 const runtimeDisplay = ref('00:00:00')
 
 /* ----- Theme system additions (style-only, no logic impact) ----- */
-export type ThemePreset = 'aurora' | 'neoglass' | 'terminal' | 'brutalist'
-export type ColorMode = 'light' | 'dark' | 'auto'
+export type ThemePreset = 'aurora' | 'gothic' | 'terminal'
 export type Density = 'compact' | 'default' | 'comfortable'
 export type FontScale = 'compact' | 'default' | 'large'
 
 export interface AppearanceSettings {
     preset: ThemePreset
-    mode: ColorMode
     density: Density
     fontScale: FontScale
     accent: string
@@ -36,7 +33,6 @@ export interface AppearanceSettings {
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
     preset: 'aurora',
-    mode: 'auto',
     density: 'default',
     fontScale: 'default',
     accent: '',
@@ -49,18 +45,16 @@ const appearance = ref<AppearanceSettings>({ ...DEFAULT_APPEARANCE })
 function applyAppearance(a: AppearanceSettings) {
     if (typeof document === 'undefined') return
     const root = document.documentElement
+    // App is dark-only — always set dark-theme on body so the
+    // :global(body.dark-theme) overrides in pages apply universally.
+    document.body.classList.add('dark-theme')
     root.setAttribute('data-theme', a.preset)
-    const effectiveMode = a.mode === 'auto'
-        ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-        : a.mode
-    root.setAttribute('data-theme-mode', effectiveMode)
     root.setAttribute('data-density', a.density)
     root.setAttribute('data-font-scale', a.fontScale)
     root.setAttribute('data-motion', a.reducedMotion ? 'reduced' : 'normal')
     root.style.setProperty('--radius-scale', String(a.radiusScale))
     if (a.accent && a.accent.trim() !== '') {
         root.style.setProperty('--accent', a.accent)
-        // derive a softer accent by setting it via the soft token
         root.style.setProperty('--accent-soft', hexToRgba(a.accent, 0.18))
     } else {
         root.style.removeProperty('--accent')
@@ -118,10 +112,6 @@ async function setPreset(preset: ThemePreset) {
     await setAppearance({ preset })
 }
 
-async function setMode(mode: ColorMode) {
-    await setAppearance({ mode })
-}
-
 async function setDensity(density: Density) {
     await setAppearance({ density })
 }
@@ -161,8 +151,6 @@ export function useSettings() {
         activeServer.value = detectServer(serverUrl.value)
         debugLog('Configuration loaded from saved settings')
         const settings = await api.getAppSettings()
-        theme.value = settings?.theme ?? 'light'
-        applyTheme(theme.value)
         snowEnabled.value = settings?.snowEnabled !== false
         logLevel.value = settings?.logLevel ?? 'info'
         /* Load appearance if present (otherwise use defaults) */
@@ -174,25 +162,8 @@ export function useSettings() {
             applyAppearance(appearance.value)
         }
         debugLog('Application settings loaded from saved config')
-        debugLog(`Theme loaded: ${theme.value}`)
         const ver = await api.getClientVersion()
         clientVersion.value = ver ?? ''
-    }
-    function applyTheme(t: 'light' | 'dark') {
-        // Map legacy light/dark toggle to the new token system while
-        // preserving existing dark-theme CSS as a fallback.
-        if (t === 'dark') {
-            document.body.classList.add('dark-theme')
-            if (typeof document !== 'undefined') {
-                document.documentElement.setAttribute('data-theme-mode', 'dark')
-            }
-        } else {
-            document.body.classList.remove('dark-theme')
-            if (typeof document !== 'undefined') {
-                document.documentElement.setAttribute('data-theme-mode', 'light')
-            }
-        }
-        theme.value = t
     }
     async function toggleSnow() {
         snowEnabled.value = !snowEnabled.value
@@ -255,7 +226,6 @@ export function useSettings() {
     return {
         serverUrl,
         activeServer,
-        theme,
         snowEnabled,
         logLevel,
         clientVersion,
@@ -274,7 +244,6 @@ export function useSettings() {
         setAccent,
         setRadiusScale,
         setPreset,
-        setMode,
         setDensity,
         setFontScale,
         setReducedMotion

@@ -7,25 +7,26 @@
   <title>ARC-OSC Client</title>
   <script>
     // Apply persisted theme + customizations synchronously before first paint
-    // to prevent a flash of unstyled content.
+    // to prevent a flash of unstyled content. App is dark-only now (every
+    // theme is designed as a dark palette), so dark-theme is always set on
+    // body and the legacy :global(body.dark-theme) rules always apply.
     (function () {
       try {
+        document.body.classList.add('dark-theme');
         var raw = localStorage.getItem('arc.appearance');
         var a = raw ? JSON.parse(raw) : null;
-        if (!a) return;
         var r = document.documentElement;
-        if (a.preset) r.setAttribute('data-theme', a.preset);
-        var mode = a.mode || 'auto';
-        if (mode === 'auto') {
-          mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        if (!a) {
+          // First launch defaults: Aurora Soft
+          r.setAttribute('data-theme', 'aurora');
+          return;
         }
-        r.setAttribute('data-theme-mode', mode);
+        if (a.preset) r.setAttribute('data-theme', a.preset);
         if (a.density) r.setAttribute('data-density', a.density);
         if (a.fontScale) r.setAttribute('data-font-scale', a.fontScale);
         r.setAttribute('data-motion', a.reducedMotion ? 'reduced' : 'normal');
         if (typeof a.radiusScale === 'number') r.style.setProperty('--radius-scale', String(a.radiusScale));
         if (a.accent && a.accent.trim() !== '') r.style.setProperty('--accent', a.accent);
-        if (mode === 'dark') document.body.classList.add('dark-theme');
       } catch (e) {}
     })();
   </script>
@@ -34,4 +35,3 @@
   <div id="app"></div>
   <script type="module" src="./src/main.ts"></script>
 </body>
-</html>

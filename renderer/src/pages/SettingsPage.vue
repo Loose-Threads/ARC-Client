@@ -18,13 +18,11 @@ const {
   loadMemoryStats,
   appearance,
   PRESET_OPTIONS,
-  MODE_OPTIONS,
   DENSITY_OPTIONS,
   FONT_SCALE_OPTIONS,
   accentInput,
   radiusInput,
   handlePresetChange,
-  handleModeChange,
   handleDensityChange,
   handleFontScaleChange,
   handleAccentChange,
@@ -52,14 +50,6 @@ const {
             {{ opt.label }} — {{ opt.description }}
           </option>
         </select>
-      </div>
-
-      <div class="form-group">
-        <label for="theme-mode">Color Mode</label>
-        <select id="theme-mode" :value="appearance.mode" @change="handleModeChange">
-          <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-        <small>Light/Dark applies on top of your chosen preset.</small>
       </div>
 
       <div class="form-group">
