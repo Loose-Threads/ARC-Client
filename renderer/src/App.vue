@@ -14,7 +14,6 @@ const vrchatOpen = ref(false)
 const {
   snowEnabled,
   runtimeDisplay,
-  toggleTheme,
   toggleSnow
 } = useSettings()
 
@@ -240,10 +239,6 @@ function linksBreakdown(panel: PanelInfo): string {
           <h3>Connection Status</h3>
           <div class="sidebar-actions">
             <button class="snow-toggle" :class="{ disabled: !snowEnabled }" type="button" title="Toggle Snow Overlay" @click="toggleSnow()">❄️</button>
-            <button class="theme-toggle" type="button" title="Toggle Theme" @click="toggleTheme()">
-              <span class="theme-toggle-sun">☀</span>
-              <span class="theme-toggle-moon">🌙</span>
-            </button>
           </div>
         </div>
         <div class="runtime-timer runtime-center">

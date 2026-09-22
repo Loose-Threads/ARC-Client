@@ -194,14 +194,6 @@ export function useSettings() {
         }
         theme.value = t
     }
-    async function toggleTheme() {
-        const newTheme = theme.value === 'light' ? 'dark' : 'light'
-        applyTheme(newTheme)
-        const settings = await api.getAppSettings()
-        settings.theme = newTheme
-        await api.setAppSettings(settings)
-        debugLog(`Theme switched to ${newTheme} mode`)
-    }
     async function toggleSnow() {
         snowEnabled.value = !snowEnabled.value
         const settings = await api.getAppSettings()
@@ -268,7 +260,6 @@ export function useSettings() {
         logLevel,
         clientVersion,
         runtimeDisplay,
-        toggleTheme,
         toggleSnow,
         switchToServer,
         updateCustomServerUrl,
