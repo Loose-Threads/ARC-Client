@@ -1,0 +1,452 @@
+/* =====================================================================
+ * Design Tokens & Theme System
+ * ---------------------------------------------------------------------
+ * Every visual property of the app is driven by CSS variables defined
+ * here. Themes are preset groups of values applied via [data-theme="..."]
+ * on <body>. User-level customizations (accent color, radius, density,
+ * font scale) override preset values via inline custom properties set on
+ * body, so they survive across preset switches.
+ *
+ * To add a theme:
+ *   1. Copy the ":root," or "[data-theme=\"<name>\"]" block
+ *   2. Override only the tokens you want different
+ *   3. Register the name in renderer/src/composables/useSettings.ts
+ * ===================================================================== */
+
+:root,
+:root[data-theme="aurora"] {
+    /* --- Surfaces (5 elevation levels) --- */
+    --surface-0: #f5f7fb;
+    --surface-1: #ffffff;
+    --surface-2: #ffffff;
+    --surface-3: #f8f9fa;
+    --surface-4: #ecf0f1;
+
+    /* --- Text (5 contrast levels) --- */
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-tertiary: #6b7280;
+    --text-muted: #9ca3af;
+    --text-inverse: #ffffff;
+
+    /* --- Borders --- */
+    --border-subtle: #e5e7eb;
+    --border-default: #d1d5db;
+    --border-strong: #9ca3af;
+
+    /* --- Accent (overridable via settings) --- */
+    --accent: #3498db;
+    --accent-hover: #2980b9;
+    --accent-active: #1f5f85;
+    --accent-soft: rgba(52, 152, 219, 0.12);
+    --accent-contrast: #ffffff;
+
+    /* --- Status colors --- */
+    --color-success: #27ae60;
+    --color-success-soft: rgba(39, 174, 96, 0.12);
+    --color-warning: #f39c12;
+    --color-warning-soft: rgba(243, 156, 18, 0.12);
+    --color-danger: #e74c3c;
+    --color-danger-soft: rgba(231, 76, 60, 0.12);
+    --color-info: #3498db;
+    --color-info-soft: rgba(52, 152, 219, 0.12);
+
+    /* --- Radii (scaled via --radius-scale) --- */
+    --radius-scale: 1;
+    --radius-sm: calc(4px * var(--radius-scale));
+    --radius-md: calc(8px * var(--radius-scale));
+    --radius-lg: calc(12px * var(--radius-scale));
+    --radius-xl: calc(16px * var(--radius-scale));
+    --radius-pill: 999px;
+
+    /* --- Shadows --- */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+
+    /* --- Spacing (scaled via --density) --- */
+    --density: 1;
+    --space-1: calc(4px * var(--density));
+    --space-2: calc(8px * var(--density));
+    --space-3: calc(12px * var(--density));
+    --space-4: calc(16px * var(--density));
+    --space-5: calc(20px * var(--density));
+    --space-6: calc(24px * var(--density));
+    --space-8: calc(32px * var(--density));
+
+    /* --- Typography --- */
+    --font-scale: 1;
+    --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    --font-display: var(--font-sans);
+    --font-size-base: calc(14px * var(--font-scale));
+    --font-size-sm: calc(12px * var(--font-scale));
+    --font-size-lg: calc(16px * var(--font-scale));
+    --font-size-xl: calc(20px * var(--font-scale));
+    --font-size-display: calc(28px * var(--font-scale));
+    --line-height-base: 1.55;
+
+    /* --- Body / app shell --- */
+    --app-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --app-bg-solid: #eef2f7;
+    --sidebar-bg: #2c3e50;
+    --sidebar-text: #ecf0f1;
+    --sidebar-text-muted: #bdc3c7;
+    --sidebar-section-border: #34495e;
+    --main-bg: rgba(255, 255, 255, 0.65);
+    --main-text: var(--text-primary);
+
+    /* --- Code/log blocks --- */
+    --code-bg: #1e1e1e;
+    --code-text: #00ff00;
+
+    /* --- Effects --- */
+    --backdrop-blur: 0px;
+    --card-translucent: 0;
+    --hairline: 1px;
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 400ms ease;
+
+    /* --- Form inputs --- */
+    --input-bg: var(--surface-1);
+    --input-border: var(--border-default);
+    --input-focus-border: var(--accent);
+    --input-text: var(--text-primary);
+    --input-placeholder: var(--text-muted);
+
+    /* --- Buttons --- */
+    --btn-text: #ffffff;
+    --btn-secondary-bg: #95a5a6;
+    --btn-secondary-hover: #7f8c8d;
+
+    /* --- Scrollbar --- */
+    --scrollbar-track: #ecf0f1;
+    --scrollbar-thumb: var(--accent);
+    --scrollbar-thumb-hover: var(--accent-hover);
+
+    color-scheme: light;
+}
+
+/* =====================================================================
+ * Dark mode override (applies to ANY preset)
+ * ===================================================================== */
+:root[data-theme-mode="dark"],
+:root[data-theme-mode="dark"][data-theme] {
+    --surface-0: #0f1115;
+    --surface-1: #161a22;
+    --surface-2: #1d2129;
+    --surface-3: #252a33;
+    --surface-4: #2c3340;
+
+    --text-primary: #e6edf3;
+    --text-secondary: #b6c0cc;
+    --text-tertiary: #8b95a3;
+    --text-muted: #6b7280;
+    --text-inverse: #0f1115;
+
+    --border-subtle: #2a2f3a;
+    --border-default: #3a4150;
+    --border-strong: #5a6478;
+
+    --accent-soft: rgba(93, 173, 226, 0.18);
+
+    --app-bg-solid: #0f1115;
+    --sidebar-bg: #161a22;
+    --sidebar-section-border: #2a2f3a;
+    --main-bg: rgba(15, 17, 21, 0.6);
+    --main-text: var(--text-primary);
+
+    --code-bg: #0a0a0a;
+    --code-text: #00ff9c;
+
+    --input-bg: var(--surface-2);
+    --input-border: var(--border-default);
+    --input-text: var(--text-primary);
+    --input-placeholder: var(--text-muted);
+
+    --btn-secondary-bg: #4a5160;
+    --btn-secondary-hover: #5a6478;
+
+    --scrollbar-track: #1d2129;
+    --scrollbar-thumb: #5a6478;
+    --scrollbar-thumb-hover: var(--accent);
+
+    color-scheme: dark;
+}
+
+/* =====================================================================
+ * Density modifiers
+ * ===================================================================== */
+:root[data-density="compact"] {
+    --density: 0.75;
+}
+:root[data-density="comfortable"] {
+    --density: 1.1;
+}
+
+/* =====================================================================
+ * Font scale modifiers
+ * ===================================================================== */
+:root[data-font-scale="large"] {
+    --font-scale: 1.1;
+}
+:root[data-font-scale="compact"] {
+    --font-scale: 0.92;
+}
+
+/* =====================================================================
+ * Reduced motion
+ * ===================================================================== */
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+}
+
+/* =====================================================================
+ * Theme: NeoGlass (frosted/translucent)
+ * ===================================================================== */
+:root[data-theme="neoglass"] {
+    --surface-0: rgba(15, 17, 25, 0.4);
+    --surface-1: rgba(255, 255, 255, 0.08);
+    --surface-2: rgba(255, 255, 255, 0.12);
+    --surface-3: rgba(255, 255, 255, 0.16);
+    --surface-4: rgba(255, 255, 255, 0.22);
+
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.78);
+    --text-tertiary: rgba(255, 255, 255, 0.6);
+    --text-muted: rgba(255, 255, 255, 0.45);
+    --text-inverse: #0f1119;
+
+    --border-subtle: rgba(255, 255, 255, 0.12);
+    --border-default: rgba(255, 255, 255, 0.2);
+    --border-strong: rgba(255, 255, 255, 0.35);
+
+    --accent: #00d4ff;
+    --accent-hover: #33ddff;
+    --accent-active: #00a8cc;
+    --accent-soft: rgba(0, 212, 255, 0.18);
+    --accent-contrast: #0f1119;
+
+    --color-success: #4ade80;
+    --color-warning: #fbbf24;
+    --color-danger: #f87171;
+    --color-info: #00d4ff;
+
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
+
+    --app-bg:
+        radial-gradient(at 12% 18%, rgba(99, 102, 241, 0.55) 0px, transparent 50%),
+        radial-gradient(at 88% 12%, rgba(236, 72, 153, 0.45) 0px, transparent 50%),
+        radial-gradient(at 70% 90%, rgba(34, 211, 238, 0.45) 0px, transparent 50%),
+        linear-gradient(135deg, #0a0e27 0%, #1a0b2e 50%, #0f1119 100%);
+    --app-bg-solid: #0f1119;
+
+    --sidebar-bg: rgba(15, 17, 25, 0.55);
+    --sidebar-text: #ffffff;
+    --sidebar-text-muted: rgba(255, 255, 255, 0.6);
+    --sidebar-section-border: rgba(255, 255, 255, 0.1);
+    --main-bg: transparent;
+    --main-text: var(--text-primary);
+
+    --backdrop-blur: 22px;
+    --card-translucent: 1;
+    --hairline: 1px;
+
+    --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    --input-bg: rgba(255, 255, 255, 0.08);
+    --input-border: rgba(255, 255, 255, 0.18);
+    --input-text: #ffffff;
+    --input-placeholder: rgba(255, 255, 255, 0.45);
+
+    --btn-secondary-bg: rgba(255, 255, 255, 0.18);
+    --btn-secondary-hover: rgba(255, 255, 255, 0.28);
+
+    --scrollbar-track: rgba(255, 255, 255, 0.05);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.25);
+    --scrollbar-thumb-hover: var(--accent);
+
+    color-scheme: dark;
+}
+
+/* =====================================================================
+ * Theme: Terminal Mono (HUD / cyberpunk-lite)
+ * ===================================================================== */
+:root[data-theme="terminal"] {
+    --surface-0: #0a0a0a;
+    --surface-1: #111111;
+    --surface-2: #161616;
+    --surface-3: #1c1c1c;
+    --surface-4: #232323;
+
+    --text-primary: #ffb000;
+    --text-secondary: #d49000;
+    --text-tertiary: #a07000;
+    --text-muted: #6a4a00;
+    --text-inverse: #0a0a0a;
+
+    --border-subtle: #2a2a2a;
+    --border-default: #3a3a3a;
+    --border-strong: #5a5a5a;
+
+    --accent: #ffb000;
+    --accent-hover: #ffc233;
+    --accent-active: #cc8a00;
+    --accent-soft: rgba(255, 176, 0, 0.15);
+    --accent-contrast: #0a0a0a;
+
+    --color-success: #00ff9c;
+    --color-success-soft: rgba(0, 255, 156, 0.15);
+    --color-warning: #ffb000;
+    --color-danger: #ff3b6b;
+    --color-danger-soft: rgba(255, 59, 107, 0.15);
+    --color-info: #00d4ff;
+    --color-info-soft: rgba(0, 212, 255, 0.15);
+
+    --radius-sm: 0px;
+    --radius-md: 0px;
+    --radius-lg: 0px;
+    --radius-xl: 0px;
+
+    --shadow-sm: 0 0 0 1px var(--border-default);
+    --shadow-md: 0 0 12px rgba(255, 176, 0, 0.2);
+    --shadow-lg: 0 0 24px rgba(255, 176, 0, 0.3);
+    --shadow-inset: inset 0 0 0 1px rgba(255, 176, 0, 0.08);
+
+    --app-bg:
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 176, 0, 0.03) 0px,
+            rgba(255, 176, 0, 0.03) 1px,
+            transparent 1px,
+            transparent 3px
+        ),
+        radial-gradient(ellipse at center, #111 0%, #050505 100%);
+    --app-bg-solid: #0a0a0a;
+
+    --sidebar-bg: #0a0a0a;
+    --sidebar-text: #ffb000;
+    --sidebar-text-muted: #a07000;
+    --sidebar-section-border: #2a2a2a;
+    --main-bg: transparent;
+    --main-text: var(--text-primary);
+
+    --code-bg: #000000;
+    --code-text: #00ff9c;
+
+    --font-sans: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    --font-display: var(--font-mono);
+    --line-height-base: 1.4;
+
+    --input-bg: #0a0a0a;
+    --input-border: #3a3a3a;
+    --input-text: #ffb000;
+    --input-placeholder: #6a4a00;
+
+    --btn-secondary-bg: #232323;
+    --btn-secondary-hover: #2e2e2e;
+
+    --scrollbar-track: #0a0a0a;
+    --scrollbar-thumb: #ffb000;
+    --scrollbar-thumb-hover: #ffc233;
+
+    --hairline: 1px;
+
+    color-scheme: dark;
+}
+
+/* =====================================================================
+ * Theme: Brutalist Edge (raw, high-contrast, bold)
+ * ===================================================================== */
+:root[data-theme="brutalist"] {
+    --surface-0: #f5f5f0;
+    --surface-1: #ffffff;
+    --surface-2: #f5f5f0;
+    --surface-3: #ebebe5;
+    --surface-4: #e0e0d8;
+
+    --text-primary: #0a0a0a;
+    --text-secondary: #1a1a1a;
+    --text-tertiary: #404040;
+    --text-muted: #707070;
+    --text-inverse: #ffffff;
+
+    --border-subtle: #1a1a1a;
+    --border-default: #0a0a0a;
+    --border-strong: #000000;
+
+    --accent: #ffeb00;
+    --accent-hover: #ffe100;
+    --accent-active: #d6c500;
+    --accent-soft: rgba(255, 235, 0, 0.25);
+    --accent-contrast: #0a0a0a;
+
+    --color-success: #00c853;
+    --color-success-soft: rgba(0, 200, 83, 0.18);
+    --color-warning: #ff6b00;
+    --color-danger: #ff0033;
+    --color-danger-soft: rgba(255, 0, 51, 0.18);
+    --color-info: #0033ff;
+    --color-info-soft: rgba(0, 51, 255, 0.18);
+
+    --radius-sm: 0px;
+    --radius-md: 0px;
+    --radius-lg: 0px;
+    --radius-xl: 0px;
+
+    --shadow-sm: 2px 2px 0 var(--border-default);
+    --shadow-md: 4px 4px 0 var(--border-default);
+    --shadow-lg: 8px 8px 0 var(--border-default);
+    --shadow-inset: inset 0 0 0 2px var(--border-default);
+
+    --app-bg:
+        repeating-linear-gradient(
+            45deg,
+            #f5f5f0,
+            #f5f5f0 20px,
+            #ebebe5 20px,
+            #ebebe5 40px
+        );
+    --app-bg-solid: #f5f5f0;
+
+    --sidebar-bg: #0a0a0a;
+    --sidebar-text: #ffffff;
+    --sidebar-text-muted: #cccccc;
+    --sidebar-section-border: #ffeb00;
+    --main-bg: #ffffff;
+    --main-text: var(--text-primary);
+
+    --code-bg: #0a0a0a;
+    --code-text: #ffeb00;
+
+    --font-sans: 'Space Grotesk', 'Archivo Black', 'Helvetica Neue', Arial, sans-serif;
+    --font-display: 'Archivo Black', 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
+    --font-size-display: calc(36px * var(--font-scale));
+
+    --input-bg: #ffffff;
+    --input-border: #0a0a0a;
+    --input-text: #0a0a0a;
+    --input-placeholder: #707070;
+
+    --btn-secondary-bg: #ffffff;
+    --btn-secondary-hover: #f5f5f0;
+    --btn-text: #0a0a0a;
+
+    --scrollbar-track: #f5f5f0;
+    --scrollbar-thumb: #0a0a0a;
+    --scrollbar-thumb-hover: #ff0033;
+
+    --hairline: 3px;
+
+    color-scheme: light;
+}

@@ -5,6 +5,30 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:; font-src 'self' data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ARC-OSC Client</title>
+  <script>
+    // Apply persisted theme + customizations synchronously before first paint
+    // to prevent a flash of unstyled content.
+    (function () {
+      try {
+        var raw = localStorage.getItem('arc.appearance');
+        var a = raw ? JSON.parse(raw) : null;
+        if (!a) return;
+        var r = document.documentElement;
+        if (a.preset) r.setAttribute('data-theme', a.preset);
+        var mode = a.mode || 'auto';
+        if (mode === 'auto') {
+          mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        r.setAttribute('data-theme-mode', mode);
+        if (a.density) r.setAttribute('data-density', a.density);
+        if (a.fontScale) r.setAttribute('data-font-scale', a.fontScale);
+        r.setAttribute('data-motion', a.reducedMotion ? 'reduced' : 'normal');
+        if (typeof a.radiusScale === 'number') r.style.setProperty('--radius-scale', String(a.radiusScale));
+        if (a.accent && a.accent.trim() !== '') r.style.setProperty('--accent', a.accent);
+        if (mode === 'dark') document.body.classList.add('dark-theme');
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>
