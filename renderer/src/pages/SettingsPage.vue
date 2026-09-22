@@ -15,7 +15,22 @@ const {
   handleCustomServer,
   handleUpdateApplicationSettings,
   loadDebugStats,
-  loadMemoryStats
+  loadMemoryStats,
+  appearance,
+  PRESET_OPTIONS,
+  MODE_OPTIONS,
+  DENSITY_OPTIONS,
+  FONT_SCALE_OPTIONS,
+  accentInput,
+  radiusInput,
+  handlePresetChange,
+  handleModeChange,
+  handleDensityChange,
+  handleFontScaleChange,
+  handleAccentChange,
+  handleResetAccent,
+  handleRadiusChange,
+  handleReducedMotionChange
 } = createSettingsPageState()
 </script>
 
@@ -24,6 +39,87 @@ const {
     <div class="header">
       <h1>Settings</h1>
       <p>Configure your ARC-OSC Client settings</p>
+    </div>
+
+    <div class="card">
+      <h3>Appearance</h3>
+      <p class="description-text">Customize the look and feel of the application. Changes apply instantly.</p>
+
+      <div class="form-group">
+        <label for="theme-preset">Theme Preset</label>
+        <select id="theme-preset" :value="appearance.preset" @change="handlePresetChange">
+          <option v-for="opt in PRESET_OPTIONS" :key="opt.value" :value="opt.value">
+            {{ opt.label }} — {{ opt.description }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="theme-mode">Color Mode</label>
+        <select id="theme-mode" :value="appearance.mode" @change="handleModeChange">
+          <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <small>Light/Dark applies on top of your chosen preset.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="theme-density">Density</label>
+        <select id="theme-density" :value="appearance.density" @change="handleDensityChange">
+          <option v-for="opt in DENSITY_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <small>Adjusts spacing and padding throughout the app.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="theme-fontscale">Font Size</label>
+        <select id="theme-fontscale" :value="appearance.fontScale" @change="handleFontScaleChange">
+          <option v-for="opt in FONT_SCALE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <small>Scales all text proportionally.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="theme-accent">Accent Color</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input
+            id="theme-accent"
+            type="color"
+            :value="accentInput || '#3498db'"
+            style="width: 56px; height: 36px; padding: 2px; cursor: pointer;"
+            @input="handleAccentChange"
+          />
+          <input
+            type="text"
+            :value="accentInput"
+            placeholder="#3498db"
+            style="flex: 1; max-width: 200px;"
+            @input="handleAccentChange"
+          />
+          <button type="button" class="btn btn-secondary btn-small" @click="handleResetAccent">Use Preset</button>
+        </div>
+        <small>Overrides the preset accent. Click "Use Preset" to restore.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="theme-radius">Corner Radius ({{ Math.round(radiusInput * 100) }}%)</label>
+        <input
+          id="theme-radius"
+          type="range"
+          min="0"
+          max="2"
+          step="0.05"
+          :value="radiusInput"
+          @input="handleRadiusChange"
+        />
+        <small>Multiplies the preset's corner roundness.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="toggle-inline">
+          <input type="checkbox" :checked="appearance.reducedMotion" @change="handleReducedMotionChange" />
+          <span>Reduce motion (disable animations/transitions)</span>
+        </label>
+      </div>
     </div>
 
     <div class="card">
