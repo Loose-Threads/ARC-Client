@@ -93,7 +93,7 @@ const {
     <!-- OpenShock Account Login (for public share links) -->
     <div v-if="status.connected" class="card">
       <details :open="showLoginForm">
-        <summary style="cursor: pointer; font-weight: 600; font-size: 14px; color: #2c3e50; padding: 4px 0;">
+        <summary style="cursor: pointer; font-weight: 600; font-size: 14px; color: var(--text-primary); padding: 4px 0;">
           &#128274; OpenShock Account Login
           <span v-if="status.loggedIn" class="os-badge os-badge-ok" style="margin-left: 8px;">Logged in as {{ status.loggedInUsername }}</span>
           <span v-else class="os-badge os-badge-muted" style="margin-left: 8px;">Not logged in</span>

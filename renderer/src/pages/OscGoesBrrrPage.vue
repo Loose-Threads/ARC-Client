@@ -75,7 +75,7 @@ const {
           </label>
           <button class="btn btn-secondary" type="button" style="padding: 6px 12px;" @click="saveIntiface">Save</button>
         </div>
-        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 5px;">
           Make sure Intiface Central is running and the server is started
         </div>
       </div>
@@ -98,7 +98,7 @@ const {
                 <rect x="1.5" y="2.5" :width="Math.max(0, (device.batteryLevel / 100) * 21)" height="9" rx="1.5"
                       :fill="device.batteryLevel >= 60 ? '#2ecc71' : device.batteryLevel >= 20 ? '#f39c12' : '#e74c3c'"/>
               </svg>
-              <span :style="{ color: device.batteryLevel >= 60 ? '#2ecc71' : device.batteryLevel >= 20 ? '#f39c12' : '#e74c3c', fontWeight: 600 }">
+              <span :style="{ color: device.batteryLevel >= 60 ? 'var(--color-success)' : device.batteryLevel >= 20 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 600 }">
                 {{ Math.round(device.batteryLevel) }}%
               </span>
             </div>
@@ -126,7 +126,7 @@ const {
           <option value="">-- No devices connected --</option>
           <option v-for="device in status.devices" :key="device.id" :value="device.id">{{ device.name }} ({{ device.id }})</option>
         </select>
-        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 5px;">
           Settings are saved per device and apply even when the device is disconnected
         </div>
       </div>
@@ -154,14 +154,14 @@ const {
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label for="ogb-config-multiplier">Intensity Multiplier (Scale)</label>
-            <span id="ogb-config-multiplier-value" style="font-weight: 600; color: #3498db;">{{ deviceBinding.multiplier.toFixed(1) }}x</span>
+            <span id="ogb-config-multiplier-value" style="font-weight: 600; color: var(--color-info);">{{ deviceBinding.multiplier.toFixed(1) }}x</span>
           </div>
           <input id="ogb-config-multiplier" v-model.number="deviceBinding.multiplier" type="range" min="0.1" max="2.0" step="0.1" style="width: 100%;" />
-          <div style="display: flex; justify-content: space-between; font-size: 13px; color: #aaa; margin-top: 2px;">
+          <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-top: 2px;">
             <span>Min: 0.1x</span>
             <span>Max: 2.0x</span>
           </div>
-          <div style="font-size: 13px; color: #b0b0b0; margin-top: 5px; line-height: 1.4;">
+          <div style="font-size: 13px; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
             Increase if toy needs more work to vibrate, decrease if it's always on/off with nothing in between
           </div>
         </div>
@@ -169,14 +169,14 @@ const {
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label for="ogb-config-idle">Idle Vibration Level</label>
-            <span id="ogb-config-idle-value" style="font-weight: 600; color: #3498db;">{{ Math.round(deviceBinding.idle * 100) }}%</span>
+            <span id="ogb-config-idle-value" style="font-weight: 600; color: var(--color-info);">{{ Math.round(deviceBinding.idle * 100) }}%</span>
           </div>
           <input id="ogb-config-idle" v-model.number="deviceBinding.idle" type="range" min="0" max="1" step="0.05" style="width: 100%;" />
-          <div style="display: flex; justify-content: space-between; font-size: 13px; color: #aaa; margin-top: 2px;">
+          <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-top: 2px;">
             <span>Min: 0%</span>
             <span>Max: 100%</span>
           </div>
-          <div style="font-size: 13px; color: #b0b0b0; margin-top: 5px; line-height: 1.4;">
+          <div style="font-size: 13px; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
             Minimum vibration level when not being touched/penetrated (idle baseline)
           </div>
         </div>
@@ -189,7 +189,7 @@ const {
               <span>Depth-Based Vibration</span>
             </label>
           </div>
-          <div style="font-size: 13px; color: #b0b0b0; margin-top: 8px; line-height: 1.4;">
+          <div style="font-size: 13px; color: var(--text-muted); margin-top: 8px; line-height: 1.4;">
             When checked: vibrates based on penetration depth. When unchecked: vibrates based on motion/speed
           </div>
         </div>
@@ -216,10 +216,10 @@ const {
 
     <div class="card">
       <h3>About OscGoesBrrr</h3>
-      <p style="font-size: 14px; color: #888; line-height: 1.6;">
+      <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
         OscGoesBrrr bridges VRChat avatar haptic parameters to Bluetooth toys via the Intiface Central application.
       </p>
-      <p style="font-size: 13px; color: #666; margin-top: 10px;">
+      <p style="font-size: 13px; color: var(--text-tertiary); margin-top: 10px;">
         Supported avatar systems: OGB (OscGoesBrrr), TPS (Poiyomi/DPS), VRCFury Haptics
       </p>
     </div>

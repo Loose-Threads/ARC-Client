@@ -47,7 +47,7 @@ const {
     </div>
     <div class="card">
       <h3>Notification Log</h3>
-      <div v-if="dbLogs.length === 0" style="text-align: center; padding: 30px; color: #666; opacity: 0.6;">
+      <div v-if="dbLogs.length === 0" style="text-align: center; padding: 30px; color: var(--text-tertiary); opacity: 0.6;">
         <p>No notifications yet</p>
         <p style="font-size: 12px; margin-top: 5px;">Notifications will appear here when panels connect or avatars change</p>
       </div>
