@@ -437,6 +437,10 @@ const {
 :root[data-theme="gothic-purple"] .heart-rate-active {
   text-shadow: 0 0 24px rgba(220, 20, 60, 0.7);
 }
+:root[data-theme="terminal"] .heart-rate-active {
+  text-shadow: 0 0 24px rgba(255, 176, 0, 0.7);
+  font-weight: 700;
+}
 
 .status-indicator.status-error {
   background-color: #e74c3c !important;
