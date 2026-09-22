@@ -132,7 +132,6 @@ body {
     .sidebar-checkbox-label span,
     .sidebar-input,
     .sidebar .sidebar-actions .snow-toggle,
-    .sidebar .sidebar-actions .theme-toggle,
     .sidebar-button,
     .sidebar .tree-toggle span:not(.arrow),
     .sidebar .tree-child,
@@ -1101,69 +1100,8 @@ body {
     51%, 100% { opacity: 0.5; }
 }
 
-/* Theme Toggle Styles */
-.theme-toggle {
-    position: relative;
-    width: 50px;
-    height: 25px;
-    border: 2px solid var(--border-default);
-    border-radius: var(--radius-pill);
-    background: var(--surface-3);
-    cursor: pointer;
-    transition: all var(--transition-base);
-    padding: 0;
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    outline: none;
-}
-
-.theme-toggle:hover {
-    transform: scale(1.05);
-    box-shadow: var(--shadow-md);
-}
-
-.theme-toggle:active {
-    transform: scale(0.95);
-}
-
-.theme-toggle-sun,
-.theme-toggle-moon {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 12px;
-    transition: all var(--transition-base);
-    user-select: none;
-}
-
-.theme-toggle-sun {
-    left: 4px;
-    opacity: 1;
-}
-
-.theme-toggle-moon {
-    right: 4px;
-    opacity: 0;
-}
-
-:root[data-theme-mode="dark"] .theme-toggle,
-body.dark-theme .theme-toggle {
-    background: var(--surface-3);
-}
-
-:root[data-theme-mode="dark"] .theme-toggle-sun,
-body.dark-theme .theme-toggle-sun {
-    opacity: 0;
-    left: -10px;
-}
-
-:root[data-theme-mode="dark"] .theme-toggle-moon,
-body.dark-theme .theme-toggle-moon {
-    opacity: 1;
-    right: 4px;
-}
-
-.server-btn-active {
+/* Theme toggle button removed — light/dark mode is now controlled via
+   Settings → Appearance (Color Mode dropdown). */.server-btn-active {
     box-shadow: 0 0 0 2px var(--accent-contrast), 0 0 0 4px var(--accent) !important;
     transform: scale(1.02);
 }
