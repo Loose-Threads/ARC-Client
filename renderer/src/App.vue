@@ -438,6 +438,13 @@ function linksBreakdown(panel: PanelInfo): string {
   font-family: inherit;
   text-align: center;
   text-decoration: none;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.85em;
+}
+.nav-link.active {
+  /* Active page — already styled via .navigation-section .btn.active */
 }
 
 .sidebar-status-header {
