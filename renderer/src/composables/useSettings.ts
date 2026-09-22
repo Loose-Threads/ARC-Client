@@ -45,9 +45,8 @@ const appearance = ref<AppearanceSettings>({ ...DEFAULT_APPEARANCE })
 function applyAppearance(a: AppearanceSettings) {
     if (typeof document === 'undefined') return
     const root = document.documentElement
-    // App is dark-only — always set dark-theme on body for the
-    // :global(body.dark-theme) overrides in pages that rely on it.
-    document.body.classList.add('dark-theme')
+    // Themes drive their own palette via [data-theme="..."] on <html>;
+    // we never set dark/light classes on <body>. The renderer owns theming.
     root.setAttribute('data-theme', a.preset)
     root.setAttribute('data-density', a.density)
     root.setAttribute('data-font-scale', a.fontScale)

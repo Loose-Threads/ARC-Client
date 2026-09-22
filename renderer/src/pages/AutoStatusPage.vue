@@ -826,25 +826,25 @@ const {
   accent-color: #3498db;
 }
 
-:global(body.dark-theme) .autostatus-dropdown-trigger {
+:global(.autostatus-dropdown-trigger) {
   background: #1e1e1e;
   border-color: #454545;
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .autostatus-dropdown-menu {
+:global(.autostatus-dropdown-menu) {
   background: #2b2b2b;
   border-color: #454545;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
+})
 
-:global(body.dark-theme) .autostatus-dropdown-item {
+:global(.autostatus-dropdown-item) {
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .autostatus-dropdown-item:hover {
+:global(.autostatus-dropdown-item:hover) {
   background: #3a3a4a;
-}
+})
 
 .autostatus-schedule-empty {
   text-align: center;
@@ -1114,92 +1114,92 @@ const {
   }
 }
 
-:global(body.dark-theme) .autostatus-banner {
+:global(.autostatus-banner) {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
+})
 
-:global(body.dark-theme) .autostatus-section-header h3,
-:global(body.dark-theme) .autostatus-preset-name-display {
+:global(.autostatus-section-header h3,
+:global(.autostatus-preset-name-display)) {
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .autostatus-section-hint,
-:global(body.dark-theme) .autostatus-field label,
-:global(body.dark-theme) .autostatus-field small,
-:global(body.dark-theme) .autostatus-schedule-days,
-:global(body.dark-theme) .autostatus-schedule-fallback label,
-:global(body.dark-theme) .autostatus-presets-empty {
+:global(.autostatus-section-hint,
+:global(.autostatus-field label),
+:global(.autostatus-field small),
+:global(.autostatus-schedule-days),
+:global(.autostatus-schedule-fallback label),
+:global(.autostatus-presets-empty)) {
   color: #95a5a6;
-}
+})
 
-:global(body.dark-theme) .autostatus-schedule-time {
+:global(.autostatus-schedule-time) {
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .autostatus-schedule-preset {
+:global(.autostatus-schedule-preset) {
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .autostatus-schedule-empty {
+:global(.autostatus-schedule-empty) {
   background: #1e1e1e;
   border-color: #454545;
   color: #7f8c8d;
-}
+})
 
-:global(body.dark-theme) .autostatus-preset-card,
-:global(body.dark-theme) .autostatus-info-box,
-:global(body.dark-theme) .autostatus-day-btn,
-:global(body.dark-theme) .autostatus-osc-param code {
+:global(.autostatus-preset-card,
+:global(.autostatus-info-box),
+:global(.autostatus-day-btn),
+:global(.autostatus-osc-param code)) {
   background: #2b2b2b;
   border-color: #454545;
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .autostatus-schedule-row {
+:global(.autostatus-schedule-row) {
   background: #2b2b2b;
   border-color: #454545;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
+})
 
-:global(body.dark-theme) .autostatus-preset-card:hover {
+:global(.autostatus-preset-card:hover) {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
+})
 
-:global(body.dark-theme) .autostatus-preset-header {
+:global(.autostatus-preset-header) {
   border-bottom-color: #454545;
-}
+})
 
-:global(body.dark-theme) .autostatus-field input,
-:global(body.dark-theme) .autostatus-field select,
-:global(body.dark-theme) .autostatus-schedule-fallback select,
-:global(body.dark-theme) .autostatus-schedule-edit-row input {
+:global(.autostatus-field input,
+:global(.autostatus-field select),
+:global(.autostatus-schedule-fallback select),
+:global(.autostatus-schedule-edit-row input)) {
   background: #1e1e1e;
   border-color: #454545;
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .autostatus-presets-empty,
-:global(body.dark-theme) .autostatus-preset-add-card {
+:global(.autostatus-presets-empty,
+:global(.autostatus-preset-add-card)) {
   border-color: #555;
   color: #999;
-}
+})
 
-:global(body.dark-theme) .autostatus-preset-add-card:hover {
+:global(.autostatus-preset-add-card:hover) {
   border-color: #3498db;
   color: #3498db;
   background: rgba(52, 152, 219, 0.1);
-}
+})
 
-:global(body.dark-theme) .autostatus-icon-btn {
+:global(.autostatus-icon-btn) {
   background: rgba(255, 255, 255, 0.08);
   color: #bdc3c7;
-}
+})
 
-:global(body.dark-theme) .autostatus-location-status {
+:global(.autostatus-location-status) {
   background: #1e1e1e;
   border: 1px solid #454545;
   border-radius: 8px;
   padding: 10px 14px;
-}
+})
 </style>
