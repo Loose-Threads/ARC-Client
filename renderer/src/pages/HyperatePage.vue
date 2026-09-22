@@ -433,6 +433,10 @@ const {
 .heart-rate-active {
   animation: pulse 1s ease-in-out;
 }
+:root[data-theme="gothic"] .heart-rate-active,
+:root[data-theme="gothic-purple"] .heart-rate-active {
+  text-shadow: 0 0 24px rgba(220, 20, 60, 0.7);
+}
 
 .status-indicator.status-error {
   background-color: #e74c3c !important;
