@@ -29,7 +29,7 @@ const {
     </div>
 
     <div v-if="error" class="card">
-      <p style="color: #e74c3c;">{{ error }}</p>
+      <p style="color: var(--color-danger);">{{ error }}</p>
     </div>
 
     <div class="card">
