@@ -531,73 +531,73 @@ const {
   }
 }
 
-:global(body.dark-theme) .hyperate-primary-badge {
+:global(.hyperate-primary-badge) {
   background: #2ecc71;
   color: #fff;
-}
+})
 
-:global(body.dark-theme) .hyperate-modal-title {
+:global(.hyperate-modal-title) {
   color: #ecf0f1;
-}
+})
 
-:global(body.dark-theme) .hyperate-modal-help {
+:global(.hyperate-modal-help) {
   color: #95a5a6;
-}
+})
 
-:global(body.dark-theme) .hyperate-empty-state {
+:global(.hyperate-empty-state) {
   color: #bdc3c7;
-}
+})
 
-:global(body.dark-theme) .hyperate-status-inactive {
+:global(.hyperate-status-inactive) {
   color: #95a5a6;
-}
+})
 
-:global(body.dark-theme) .hyperate-readonly-input {
+:global(.hyperate-readonly-input) {
   background-color: #1e2329;
   color: #7f8c8d;
   border-color: #34495e;
-}
+})
 
-:global(body.dark-theme) pre {
+:global(pre) {
   background: #2c3e50 !important;
   color: #ecf0f1 !important;
-}
-:global(body.dark-theme) .hr-range-btn {
+})
+:global(.hr-range-btn) {
   border-color: #454545;
   background: #2c3e50;
   color: #95a5a6;
-}
-:global(body.dark-theme) .hr-range-btn:hover {
+})
+:global(.hr-range-btn:hover) {
   color: #ecf0f1;
   background: #34495e;
-}
-:global(body.dark-theme) .hr-range-btn.active {
+})
+:global(.hr-range-btn.active) {
   background: #3498db;
   color: #fff;
   border-color: #3498db;
-}
-:global(body.dark-theme) .hr-retention-select {
+})
+:global(.hr-retention-select) {
   border-color: #454545;
   background: #2c3e50;
   color: #ecf0f1;
-}
-:global(body.dark-theme) .hr-stat-val {
+})
+:global(.hr-stat-val) {
   color: #ecf0f1;
-}
-:global(body.dark-theme) .hr-datetime-input {
+})
+:global(.hr-datetime-input) {
   border-color: #454545;
   background: #2c3e50;
   color: #ecf0f1;
-}
-:global(body.dark-theme) .hr-custom-arrow {
+})
+:global(.hr-custom-arrow) {
   color: #95a5a6;
-}
-:global(body.dark-theme) .hr-live-btn-idle {
+})
+:global(.hr-live-btn-idle) {
   background: #2c3e50;
   color: #95a5a6;
   border-color: #454545;
-}
-:global(body.dark-theme) .hr-live-dot {
+})
+:global(.hr-live-dot) {
   background: #555;
-}
+})
 </style>

@@ -407,9 +407,11 @@ function handleWheel(e: WheelEvent) {
 }
 let resizeObserver: ResizeObserver | null = null
 onMounted(() => {
-  isDark.value = document.body.classList.contains('dark-theme')
+  // App is dark-only — chart always renders dark. Keep the observer hook
+  // in case a future light theme is added.
+  isDark.value = true
   themeObserver = new MutationObserver(() => {
-    isDark.value = document.body.classList.contains('dark-theme')
+    isDark.value = true
     scheduleDraw()
   })
   themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
@@ -483,7 +485,7 @@ watch(() => [props.data, props.isLive, props.minBpm, props.maxBpm, props.avgBpm]
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.7); }
 }
-:global(body.dark-theme) .hr-chart-container {
+:global(.hr-chart-container) {
   background: #1a1a2e;
-}
+})
 </style>
