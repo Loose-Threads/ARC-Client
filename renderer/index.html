@@ -5,9 +5,33 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:; font-src 'self' data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ARC-OSC Client</title>
+  <script>
+    // Apply persisted theme + customizations synchronously before first paint
+    // to prevent a flash of unstyled content. App is dark-only now (every
+    // theme is designed as a dark palette), so dark-theme is always set on
+    // body and the legacy :global(body.dark-theme) rules always apply.
+    (function () {
+      try {
+        document.body.classList.add('dark-theme');
+        var raw = localStorage.getItem('arc.appearance');
+        var a = raw ? JSON.parse(raw) : null;
+        var r = document.documentElement;
+        if (!a) {
+          // First launch defaults: Aurora Soft
+          r.setAttribute('data-theme', 'aurora');
+          return;
+        }
+        if (a.preset) r.setAttribute('data-theme', a.preset);
+        if (a.density) r.setAttribute('data-density', a.density);
+        if (a.fontScale) r.setAttribute('data-font-scale', a.fontScale);
+        r.setAttribute('data-motion', a.reducedMotion ? 'reduced' : 'normal');
+        if (typeof a.radiusScale === 'number') r.style.setProperty('--radius-scale', String(a.radiusScale));
+        if (a.accent && a.accent.trim() !== '') r.style.setProperty('--accent', a.accent);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>
   <script type="module" src="./src/main.ts"></script>
 </body>
-</html>

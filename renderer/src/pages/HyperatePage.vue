@@ -83,10 +83,10 @@ const {
     <div class="card">
       <h3>Current Heart Rate</h3>
       <div style="text-align: center; padding: 20px;">
-        <div id="current-heartrate" style="font-size: 48px; font-weight: bold; color: #e74c3c;" :class="{ 'heart-rate-active': currentHeartRate !== '--' }">{{ currentHeartRate }}</div>
-        <div style="font-size: 14px; color: #666; margin-top: 5px;">BPM</div>
-        <div id="primary-tracker-info" style="font-size: 12px; color: #999; margin-top: 10px;">{{ primaryTrackerLabel }}</div>
-        <div style="font-size: 12px; color: #999; margin-top: 5px;">
+        <div id="current-heartrate" style="font-size: 48px; font-weight: bold; color: var(--color-danger);" :class="{ 'heart-rate-active': currentHeartRate !== '--' }">{{ currentHeartRate }}</div>
+        <div style="font-size: 14px; color: var(--text-tertiary); margin-top: 5px;">BPM</div>
+        <div id="primary-tracker-info" style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">{{ primaryTrackerLabel }}</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
           OSC Parameter: <code>/avatar/parameters/ARCOSC/Heartrate/Value</code>
         </div>
       </div>
@@ -120,7 +120,7 @@ const {
           {{ isLive ? 'Live' : 'Paused' }}
         </button>
         <div class="hr-retention-group">
-          <label style="font-size: 12px; color: #666;">Retention:</label>
+          <label style="font-size: 12px; color: var(--text-tertiary);">Retention:</label>
           <select class="hr-retention-select" :value="retentionDays" @change="setRetention(Number(($event.target as HTMLSelectElement).value))">
             <option :value="1">1 day</option>
             <option :value="3">3 days</option>
@@ -130,7 +130,7 @@ const {
           </select>
         </div>
         <div class="hr-retention-group">
-          <label style="font-size: 12px; color: #666;">Capture:</label>
+          <label style="font-size: 12px; color: var(--text-tertiary);">Capture:</label>
           <select class="hr-retention-select" :value="captureRate" @change="setCaptureRate(Number(($event.target as HTMLSelectElement).value))">
             <option :value="500">500ms</option>
             <option :value="1000">1s</option>
@@ -153,9 +153,9 @@ const {
         />
       </div>
       <div v-if="stats.count > 0" class="chart-stats-row">
-        <span class="hr-stat"><span class="hr-stat-label">Min</span> <span class="hr-stat-val" style="color: #2ecc71;">{{ stats.min }}</span></span>
-        <span class="hr-stat"><span class="hr-stat-label">Avg</span> <span class="hr-stat-val" style="color: #f39c12;">{{ stats.avg }}</span></span>
-        <span class="hr-stat"><span class="hr-stat-label">Max</span> <span class="hr-stat-val" style="color: #3498db;">{{ stats.max }}</span></span>
+        <span class="hr-stat"><span class="hr-stat-label">Min</span> <span class="hr-stat-val" style="color: var(--color-success);">{{ stats.min }}</span></span>
+        <span class="hr-stat"><span class="hr-stat-label">Avg</span> <span class="hr-stat-val" style="color: var(--color-warning);">{{ stats.avg }}</span></span>
+        <span class="hr-stat"><span class="hr-stat-label">Max</span> <span class="hr-stat-val" style="color: var(--color-info);">{{ stats.max }}</span></span>
         <span class="hr-stat"><span class="hr-stat-label">Points</span> <span class="hr-stat-val">{{ stats.count.toLocaleString() }}</span></span>
       </div>
     </div>
@@ -169,7 +169,7 @@ const {
           <input id="device-name-input" v-model="newDeviceName" type="text" placeholder="Device name (optional)" style="flex: 1;" @keyup.enter="handleAddTracker" />
           <button class="btn btn-primary" @click="handleAddTracker">Add Tracker</button>
         </div>
-        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 5px;">
           Get your device ID from the HypeRate app or use "internal-testing" for testing
         </div>
       </div>

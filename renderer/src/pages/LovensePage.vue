@@ -6,7 +6,7 @@
     </div>
     <div class="card">
       <h3>Feature coming soon</h3>
-      <p style="color: #666; text-align: center; padding: 20px;">
+      <p style="color: var(--text-tertiary); text-align: center; padding: 20px;">
         This feature will allow control of Lovense toys through VRChat's expression menu using float values.
       </p>
     </div>

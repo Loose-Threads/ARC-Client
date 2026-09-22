@@ -1,10 +1,9 @@
 // ====
 // Shared dark-theme observation composable.
-// Several pages previously re-implemented the same MutationObserver
-// pattern (syncThemeState + observe body class changes). This composable
-// centralizes it: call useTheme() in a page factory, read isDarkTheme,
-// and the observer is registered/cleaned up via start/stop or automatic
-// onMounted/onUnmounted binding.
+// The app is dark-only; `dark-theme` is permanently set on <body> at boot.
+// This composable still watches the class for any edge case where pages
+// need to apply a class binding reactively (e.g. Hyperate, AutoStatus,
+// OscLeash use the returned `isDarkTheme` flag for dark-specific styling).
 // ====
 import { onMounted, onUnmounted, ref } from 'vue'
 

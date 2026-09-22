@@ -33,7 +33,6 @@ const {
   openAccessTypeDropdown,
   telemetryEnabled,
   telemetryBusy,
-  isDarkTheme,
   toggleTelemetry,
   onPresetFieldChange,
   toggleDay,
@@ -240,12 +239,12 @@ const {
             <div class="autostatus-field">
               <label>Instance Type</label>
               <div class="autostatus-dropdown-wrap">
-                <div class="autostatus-dropdown-trigger" :style="{ background: isDarkTheme ? '#1e1e1e' : '#fafafa', borderColor: isDarkTheme ? '#454545' : '#e0e0e0', color: isDarkTheme ? '#ecf0f1' : '#2c3e50' }" @click.stop="toggleAccessTypeDropdown(rule.id)">
+                <div class="autostatus-dropdown-trigger" :style="{ background: 'var(--surface-2)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }" @click.stop="toggleAccessTypeDropdown(rule.id)">
                   <span class="autostatus-dropdown-value">{{ formatAccessType(rule.matchAccessTypes) }}</span>
                   <span class="autostatus-dropdown-arrow">&#9662;</span>
                 </div>
-                <div v-if="openAccessTypeDropdown === rule.id" class="autostatus-dropdown-menu" :style="{ background: isDarkTheme ? '#2b2b2b' : '#fff', borderColor: isDarkTheme ? '#454545' : '#e0e0e0', boxShadow: isDarkTheme ? '0 4px 16px rgba(0,0,0,0.4)' : '0 4px 16px rgba(0,0,0,0.12)' }">
-                  <label v-for="type in INSTANCE_TYPES" :key="type.value" class="autostatus-dropdown-item" :style="{ color: isDarkTheme ? '#ecf0f1' : '#2c3e50', background: 'transparent' }" @mouseenter="$event.target.style.background = isDarkTheme ? '#3a3a4a' : '#f0f7ff'" @mouseleave="$event.target.style.background = 'transparent'" @click.stop>
+                <div v-if="openAccessTypeDropdown === rule.id" class="autostatus-dropdown-menu" :style="{ background: 'var(--surface-1)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }">
+                  <label v-for="type in INSTANCE_TYPES" :key="type.value" class="autostatus-dropdown-item" :style="{ color: 'var(--text-primary)', background: 'transparent' }" @mouseenter="$event.target.style.background = 'var(--accent-soft)'" @mouseleave="$event.target.style.background = 'transparent'" @click.stop>
                     <input type="checkbox" :checked="(rule.matchAccessTypes || []).includes(type.value)" @change="toggleAccessType(rule, type.value)" />
                     {{ type.label }}
                   </label>
