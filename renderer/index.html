@@ -7,12 +7,11 @@
   <title>ARC-OSC Client</title>
   <script>
     // Apply persisted theme + customizations synchronously before first paint
-    // to prevent a flash of unstyled content. App is dark-only now (every
-    // theme is designed as a dark palette), so dark-theme is always set on
-    // body and the legacy :global(body.dark-theme) rules always apply.
+    // to prevent a flash of unstyled content. The app is dark-only — themes
+    // own their own palette via [data-theme="..."] on <html>; we never set
+    // a dark/light class on <body>. The renderer owns theming, not HTML.
     (function () {
       try {
-        document.body.classList.add('dark-theme');
         var raw = localStorage.getItem('arc.appearance');
         var a = raw ? JSON.parse(raw) : null;
         var r = document.documentElement;
