@@ -9,22 +9,14 @@ import { ref, watch } from 'vue'
 import {
   useSettings,
   type ThemePreset,
-  type ColorMode,
   type Density,
   type FontScale
 } from '../composables/useSettings'
 
 const PRESET_OPTIONS: Array<{ value: ThemePreset; label: string; description: string }> = [
   { value: 'aurora', label: 'Aurora Soft', description: 'Clean, friendly, modern flat' },
-  { value: 'neoglass', label: 'NeoGlass', description: 'Frosted translucent acrylic' },
-  { value: 'terminal', label: 'Terminal Mono', description: 'Amber HUD / monospace' },
-  { value: 'brutalist', label: 'Brutalist Edge', description: 'Bold borders, raw geometry' }
-]
-
-const MODE_OPTIONS: Array<{ value: ColorMode; label: string }> = [
-  { value: 'auto', label: 'Auto (System)' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' }
+  { value: 'gothic', label: 'Gothic Crimson', description: 'Velvet blacks with deep crimson accents' },
+  { value: 'terminal', label: 'Terminal Mono', description: 'Amber HUD / monospace' }
 ]
 
 const DENSITY_OPTIONS: Array<{ value: Density; label: string }> = [
@@ -46,7 +38,7 @@ export function createSettingsPageState() {
     updateCustomServerUrl, updateLogLevel,
     getDebugStats, getMemoryStats, forceMemoryCleanup, clearDebugLogs,
     appearance,
-    setPreset, setMode, setDensity, setFontScale,
+    setPreset, setDensity, setFontScale,
     setAccent, setRadiusScale, setReducedMotion
   } = useSettings()
   const customUrl = ref('')
@@ -81,9 +73,6 @@ export function createSettingsPageState() {
   }
   async function handlePresetChange(e: Event) {
     await setPreset((e.target as HTMLSelectElement).value as ThemePreset)
-  }
-  async function handleModeChange(e: Event) {
-    await setMode((e.target as HTMLSelectElement).value as ColorMode)
   }
   async function handleDensityChange(e: Event) {
     await setDensity((e.target as HTMLSelectElement).value as Density)
@@ -126,13 +115,11 @@ export function createSettingsPageState() {
     /* Appearance additions */
     appearance,
     PRESET_OPTIONS,
-    MODE_OPTIONS,
     DENSITY_OPTIONS,
     FONT_SCALE_OPTIONS,
     accentInput,
     radiusInput,
     handlePresetChange,
-    handleModeChange,
     handleDensityChange,
     handleFontScaleChange,
     handleAccentChange,

@@ -6,8 +6,9 @@
  * tokens; this file provides the structural rules and references tokens
  * for colors, spacing, radii, shadows, etc.
  *
- * The legacy `body.dark-theme` overrides remain as a safety fallback so
- * existing user data continues to work after the migration.
+ * The app is dark-only now (every theme is a dark palette). The
+ * `<body class="dark-theme">` class is set permanently at boot so the
+ * scattered `:global(body.dark-theme)` overrides in pages apply always.
  * ===================================================================== */
 
 * {
@@ -18,18 +19,6 @@
 
 /* Feedback UI CSS Variables (kept for backward compatibility) */
 :root {
-    --feedback-bg: var(--surface-1);
-    --feedback-bg-alt: var(--surface-3);
-    --feedback-border: var(--border-default);
-    --feedback-text: var(--text-primary);
-    --feedback-text-secondary: var(--text-secondary);
-    --feedback-note-bg: var(--color-info-soft);
-    --feedback-note-border: var(--color-info);
-    --feedback-meta-text: var(--text-tertiary);
-    --staff-response-bg: var(--surface-3);
-}
-
-body.dark-theme {
     --feedback-bg: var(--surface-1);
     --feedback-bg-alt: var(--surface-3);
     --feedback-border: var(--border-default);
