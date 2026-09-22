@@ -129,55 +129,7 @@
     color-scheme: light;
 }
 
-/* =====================================================================
- * Dark mode override (applies to ANY preset)
- * ===================================================================== */
-:root[data-theme-mode="dark"],
-:root[data-theme-mode="dark"][data-theme] {
-    --surface-0: #0f1115;
-    --surface-1: #161a22;
-    --surface-2: #1d2129;
-    --surface-3: #252a33;
-    --surface-4: #2c3340;
-
-    --text-primary: #e6edf3;
-    --text-secondary: #b6c0cc;
-    --text-tertiary: #8b95a3;
-    --text-muted: #6b7280;
-    --text-inverse: #0f1115;
-
-    --border-subtle: #2a2f3a;
-    --border-default: #3a4150;
-    --border-strong: #5a6478;
-
-    --accent-soft: rgba(93, 173, 226, 0.18);
-
-    --app-bg-solid: #0f1115;
-    --sidebar-bg: #161a22;
-    --sidebar-section-border: #2a2f3a;
-    --main-bg: rgba(15, 17, 21, 0.6);
-    --main-text: var(--text-primary);
-
-    --code-bg: #0a0a0a;
-    --code-text: #00ff9c;
-
-    --input-bg: var(--surface-2);
-    --input-border: var(--border-default);
-    --input-text: var(--text-primary);
-    --input-placeholder: var(--text-muted);
-
-    --btn-secondary-bg: #4a5160;
-    --btn-secondary-hover: #5a6478;
-
-    --scrollbar-track: #1d2129;
-    --scrollbar-thumb: #5a6478;
-    --scrollbar-thumb-hover: var(--accent);
-
-    color-scheme: dark;
-}
-
-/* =====================================================================
- * Density modifiers
+/* Density modifiers
  * ===================================================================== */
 :root[data-density="compact"] {
     --density: 0.75;
@@ -316,6 +268,148 @@
     --font-size-display: calc(34px * var(--font-scale));
 
     color-scheme: dark;
+}
+
+/* =====================================================================
+ * Gothic Crimson — Theme-specific polish
+ * ---------------------------------------------------------------------
+ * Ornate section headings with fleur-de-lis bullets, glowing red focus
+ * rings, subtle animated blood-pulse on the accent, and uppercase
+ * small-labels with crimson tint.
+ * ===================================================================== */
+:root[data-theme="gothic"] {
+    --shadow-md:
+        0 6px 20px rgba(0, 0, 0, 0.65),
+        0 0 24px rgba(220, 20, 60, 0.18),
+        inset 0 1px 0 rgba(220, 20, 60, 0.06);
+    --shadow-lg:
+        0 16px 40px rgba(0, 0, 0, 0.75),
+        0 0 48px rgba(220, 20, 60, 0.25),
+        inset 0 1px 0 rgba(220, 20, 60, 0.08);
+    --font-sans: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
+    --line-height-base: 1.5;
+}
+
+/* Section heading ornaments: fleur-de-lis prefix on .card h3, double
+   vertical bars on sidebar section h3 */
+:root[data-theme="gothic"] .card h3 {
+    border-bottom: 1px solid var(--border-default);
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-5);
+    letter-spacing: 0.04em;
+}
+:root[data-theme="gothic"] .card h3::before {
+    content: "\u2767  ";
+    color: var(--accent);
+    opacity: 0.85;
+}
+:root[data-theme="gothic"] .sidebar-section h3::before {
+    content: "\u2756  ";
+    color: var(--accent);
+    margin-right: 4px;
+}
+:root[data-theme="gothic"] .sidebar-section h3 {
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Bold, dramatic page titles */
+:root[data-theme="gothic"] .header h1 {
+    font-family: var(--font-display);
+    font-size: calc(40px * var(--font-scale));
+    letter-spacing: 0.06em;
+    text-align: center;
+    color: var(--accent);
+    text-shadow:
+        0 0 18px rgba(220, 20, 60, 0.45),
+        0 2px 0 rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="gothic"] .header p {
+    color: var(--text-secondary);
+    font-style: italic;
+    letter-spacing: 0.03em;
+}
+
+/* Blood-glow focus ring on inputs/buttons */
+:root[data-theme="gothic"] .form-group input:focus,
+:root[data-theme="gothic"] .form-group select:focus,
+:root[data-theme="gothic"] .form-group textarea:focus,
+:root[data-theme="gothic"] .autostatus-field input:focus,
+:root[data-theme="gothic"] .autostatus-field select:focus {
+    box-shadow:
+        0 0 0 3px var(--accent-soft),
+        0 0 18px rgba(220, 20, 60, 0.35);
+    border-color: var(--accent);
+}
+
+/* Primary buttons get a subtle blood-pulse on hover */
+:root[data-theme="gothic"] .btn-primary {
+    box-shadow: 0 0 0 1px rgba(220, 20, 60, 0.4), 0 4px 12px rgba(220, 20, 60, 0.25);
+    transition: background-color var(--transition-fast),
+                box-shadow var(--transition-base),
+                transform var(--transition-fast);
+}
+:root[data-theme="gothic"] .btn-primary:hover {
+    box-shadow:
+        0 0 0 1px var(--accent),
+        0 0 24px rgba(220, 20, 60, 0.6),
+        0 4px 16px rgba(220, 20, 60, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Danger buttons: deeper crimson with stronger glow */
+:root[data-theme="gothic"] .btn-danger {
+    background: #8b0000;
+    box-shadow: 0 0 18px rgba(139, 0, 0, 0.45);
+}
+
+/* Sidebar gets a thin crimson accent line on the right */
+:root[data-theme="gothic"] .sidebar {
+    border-right: 1px solid var(--border-default);
+    box-shadow: 1px 0 18px rgba(220, 20, 60, 0.1);
+}
+
+/* Subtle vignette over the entire viewport */
+:root[data-theme="gothic"] body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 35%,
+        rgba(20, 0, 0, 0.5) 100%
+    );
+}
+
+/* All-caps labels with crimson tint, wider tracking */
+:root[data-theme="gothic"] .form-group label,
+:root[data-theme="gothic"] .panel-stat-label,
+:root[data-theme="gothic"] .access-indicator,
+:root[data-theme="gothic"] .badge,
+:root[data-theme="gothic"] .safety-label,
+:root[data-theme="gothic"] .description-text {
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+}
+
+/* Card borders get a hairline crimson tint */
+:root[data-theme="gothic"] .card,
+:root[data-theme="gothic"] .panel-card,
+:root[data-theme="gothic"] .ogb-device-card {
+    border-color: rgba(107, 46, 52, 0.45);
+}
+
+/* Status indicators — gold for success (jewel), red for danger */
+:root[data-theme="gothic"] .status-connected {
+    background-color: var(--color-success);
+    box-shadow: 0 0 12px var(--color-success-soft);
+}
+:root[data-theme="gothic"] .status-disconnected {
+    background-color: var(--color-danger);
+    box-shadow: 0 0 12px var(--color-danger-soft);
 }
 
 /* =====================================================================
