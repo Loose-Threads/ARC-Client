@@ -403,6 +403,262 @@
 }
 
 /* =====================================================================
+ * Theme: Gothic Purple
+ * ---------------------------------------------------------------------
+ * Deep midnight violet base with glossy purple highlights. Same
+ * gothic cathedral aesthetic as Crimson but in royal violet — feels
+ * more regal, mystic, and "deep/glossy". Status uses gold + amethyst.
+ * ===================================================================== */
+:root[data-theme="gothic-purple"] {
+    /* Surfaces — deep midnight purple */
+    --surface-0: #08050d;
+    --surface-1: #0f0a1c;
+    --surface-2: #170f29;
+    --surface-3: #20153a;
+    --surface-4: #2c1c4d;
+
+    /* Text — pearl whites with violet tints */
+    --text-primary: #f0eafa;
+    --text-secondary: #c0a8d8;
+    --text-tertiary: #8a6ea8;
+    --text-muted: #5e4880;
+    --text-inverse: #0f0a1c;
+
+    /* Borders — deep amethyst lines */
+    --border-subtle: #1f1230;
+    --border-default: #2e1d4a;
+    --border-strong: #5a2e8a;
+
+    /* Accent — vibrant glossy violet */
+    --accent: #a855f7;
+    --accent-hover: #c084fc;
+    --accent-active: #7e22ce;
+    --accent-soft: rgba(168, 85, 247, 0.22);
+    --accent-contrast: #fff5fb;
+
+    /* Status — gold + amethyst jewel tones */
+    --color-success: #6ee7b7;
+    --color-success-soft: rgba(110, 231, 183, 0.18);
+    --color-warning: #fbbf24;
+    --color-warning-soft: rgba(251, 191, 36, 0.18);
+    --color-danger: #f472b6;
+    --color-danger-soft: rgba(244, 114, 182, 0.22);
+    --color-info: #d4af37;
+    --color-info-soft: rgba(212, 175, 55, 0.18);
+
+    /* Radii — soft curves */
+    --radius-sm: calc(4px * var(--radius-scale));
+    --radius-md: calc(8px * var(--radius-scale));
+    --radius-lg: calc(12px * var(--radius-scale));
+    --radius-xl: calc(16px * var(--radius-scale));
+
+    /* Shadows — violet-tinted with glossy halo */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 8px rgba(168, 85, 247, 0.05);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 24px rgba(168, 85, 247, 0.15);
+    --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 48px rgba(168, 85, 247, 0.25);
+    --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+
+    /* Background — gothic cathedral violet gradient */
+    --app-bg:
+        radial-gradient(ellipse at 20% 0%, rgba(168, 85, 247, 0.25) 0px, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(88, 28, 135, 0.32) 0px, transparent 55%),
+        radial-gradient(circle at 50% 50%, rgba(45, 20, 75, 0.4) 0px, transparent 70%),
+        linear-gradient(180deg, #08050d 0%, #0f0a1c 50%, #08050d 100%);
+    --app-bg-solid: #08050d;
+
+    /* Sidebar — stained amethyst */
+    --sidebar-bg: #0f0a1c;
+    --sidebar-text: #f0eafa;
+    --sidebar-text-muted: #8a6ea8;
+    --sidebar-section-border: #5a2e8a;
+    --main-bg: transparent;
+    --main-text: var(--text-primary);
+
+    /* Code — deep obsidian with violet */
+    --code-bg: #050208;
+    --code-text: #c084fc;
+
+    /* Effects */
+    --backdrop-blur: 0px;
+    --card-translucent: 0;
+    --hairline: 1px;
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 400ms ease;
+
+    /* Inputs */
+    --input-bg: var(--surface-2);
+    --input-border: var(--border-default);
+    --input-focus-border: var(--accent);
+    --input-text: var(--text-primary);
+    --input-placeholder: var(--text-muted);
+
+    /* Buttons */
+    --btn-text: #fff5fb;
+    --btn-secondary-bg: #2e1d4a;
+    --btn-secondary-hover: #5a2e8a;
+
+    /* Scrollbar */
+    --scrollbar-track: #0f0a1c;
+    --scrollbar-thumb: #5a2e8a;
+    --scrollbar-thumb-hover: var(--accent);
+
+    /* Typography — elegant serifs for display */
+    --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    --font-display: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
+    --font-size-display: calc(34px * var(--font-scale));
+
+    color-scheme: dark;
+}
+
+/* =====================================================================
+ * Gothic Purple — Theme-specific polish
+ * ---------------------------------------------------------------------
+ * Violet fleur-de-lis ornaments, glossy button halos with extra inset
+ * highlight for "glossy" feel, violet glow halos, deeper vignette.
+ * ===================================================================== */
+:root[data-theme="gothic-purple"] {
+    --shadow-md:
+        0 6px 20px rgba(0, 0, 0, 0.65),
+        0 0 28px rgba(168, 85, 247, 0.22),
+        inset 0 1px 0 rgba(168, 85, 247, 0.08);
+    --shadow-lg:
+        0 16px 40px rgba(0, 0, 0, 0.75),
+        0 0 56px rgba(168, 85, 247, 0.3),
+        inset 0 1px 0 rgba(168, 85, 247, 0.1);
+    --font-sans: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
+    --line-height-base: 1.5;
+}
+
+/* Section heading ornaments */
+:root[data-theme="gothic-purple"] .card h3 {
+    border-bottom: 1px solid var(--border-default);
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-5);
+    letter-spacing: 0.04em;
+}
+:root[data-theme="gothic-purple"] .card h3::before {
+    content: "\u2767  ";
+    color: var(--accent);
+    opacity: 0.9;
+    text-shadow: 0 0 12px rgba(168, 85, 247, 0.6);
+}
+:root[data-theme="gothic-purple"] .sidebar-section h3::before {
+    content: "\u2766  ";
+    color: var(--accent);
+    margin-right: 4px;
+    text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}
+:root[data-theme="gothic-purple"] .sidebar-section h3 {
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Dramatic page title with violet text-glow */
+:root[data-theme="gothic-purple"] .header h1 {
+    font-family: var(--font-display);
+    font-size: calc(40px * var(--font-scale));
+    letter-spacing: 0.06em;
+    text-align: center;
+    color: var(--accent);
+    text-shadow:
+        0 0 22px rgba(168, 85, 247, 0.55),
+        0 2px 0 rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="gothic-purple"] .header p {
+    color: var(--text-secondary);
+    font-style: italic;
+    letter-spacing: 0.03em;
+}
+
+/* Violet glow focus rings */
+:root[data-theme="gothic-purple"] .form-group input:focus,
+:root[data-theme="gothic-purple"] .form-group select:focus,
+:root[data-theme="gothic-purple"] .form-group textarea:focus,
+:root[data-theme="gothic-purple"] .autostatus-field input:focus,
+:root[data-theme="gothic-purple"] .autostatus-field select:focus {
+    box-shadow:
+        0 0 0 3px var(--accent-soft),
+        0 0 22px rgba(168, 85, 247, 0.45);
+    border-color: var(--accent);
+}
+
+/* Primary buttons: violet glossy halo + inset highlight + hover glow */
+:root[data-theme="gothic-purple"] .btn-primary {
+    box-shadow:
+        0 0 0 1px rgba(168, 85, 247, 0.5),
+        0 4px 14px rgba(168, 85, 247, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transition: background-color var(--transition-fast),
+                box-shadow var(--transition-base),
+                transform var(--transition-fast);
+}
+:root[data-theme="gothic-purple"] .btn-primary:hover {
+    box-shadow:
+        0 0 0 1px var(--accent),
+        0 0 30px rgba(168, 85, 247, 0.7),
+        0 6px 20px rgba(168, 85, 247, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+/* Danger buttons: deep magenta with strong glow */
+:root[data-theme="gothic-purple"] .btn-danger {
+    background: #be185d;
+    box-shadow: 0 0 22px rgba(190, 24, 93, 0.5);
+}
+
+/* Sidebar gets a thin amethyst accent line on the right */
+:root[data-theme="gothic-purple"] .sidebar {
+    border-right: 1px solid var(--border-default);
+    box-shadow: 1px 0 22px rgba(168, 85, 247, 0.14);
+}
+
+/* Deeper violet vignette */
+:root[data-theme="gothic-purple"] body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 30%,
+        rgba(20, 0, 40, 0.55) 100%
+    );
+}
+
+/* Uppercase + tracking labels with violet tint */
+:root[data-theme="gothic-purple"] .form-group label,
+:root[data-theme="gothic-purple"] .panel-stat-label,
+:root[data-theme="gothic-purple"] .access-indicator,
+:root[data-theme="gothic-purple"] .badge,
+:root[data-theme="gothic-purple"] .safety-label,
+:root[data-theme="gothic-purple"] .description-text {
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+}
+
+/* Card borders with hairline violet tint */
+:root[data-theme="gothic-purple"] .card,
+:root[data-theme="gothic-purple"] .panel-card,
+:root[data-theme="gothic-purple"] .ogb-device-card {
+    border-color: rgba(90, 46, 138, 0.5);
+}
+
+/* Status indicator glows */
+:root[data-theme="gothic-purple"] .status-connected {
+    background-color: var(--color-success);
+    box-shadow: 0 0 14px var(--color-success-soft);
+}
+:root[data-theme="gothic-purple"] .status-disconnected {
+    background-color: var(--color-danger);
+    box-shadow: 0 0 14px var(--color-danger-soft);
+}
+
+/* =====================================================================
  * Density modifiers
  * ===================================================================== */
 :root[data-density="compact"] {
