@@ -243,18 +243,6 @@ body {
     position: relative;
 }
 
-:root[data-theme="neoglass"] .card,
-:root[data-theme="neoglass"] .sidebar,
-:root[data-theme="neoglass"] .notice-banner {
-    backdrop-filter: blur(var(--backdrop-blur)) saturate(160%);
-    -webkit-backdrop-filter: blur(var(--backdrop-blur)) saturate(160%);
-}
-
-:root[data-theme="brutalist"] .card:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0 var(--border-default);
-}
-
 .card h3 {
     margin-bottom: var(--space-4);
     font-size: var(--font-size-lg);
@@ -313,21 +301,6 @@ body {
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-}
-
-:root[data-theme="brutalist"] .btn {
-    border: var(--hairline) solid var(--border-default);
-    box-shadow: var(--shadow-sm);
-}
-
-:root[data-theme="brutalist"] .btn:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-md);
-}
-
-:root[data-theme="brutalist"] .btn:active {
-    transform: translate(0, 0);
-    box-shadow: 1px 1px 0 var(--border-default);
 }
 
 :root[data-theme="terminal"] .btn {
@@ -930,11 +903,6 @@ body {
 
 .navigation-section .btn:hover {
     transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-}
-
-:root[data-theme="brutalist"] .navigation-section .btn:hover {
-    transform: translate(-2px, -2px);
     box-shadow: var(--shadow-md);
 }
 
@@ -1656,18 +1624,9 @@ body {
     transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-base);
 }
 
-:root[data-theme="brutalist"] .panel-card {
-    border-width: 3px;
-}
-
 .panel-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
-}
-
-:root[data-theme="brutalist"] .panel-card:hover {
-    transform: translate(-3px, -3px);
-    box-shadow: 7px 7px 0 var(--border-default);
 }
 
 .panel-card-header {
@@ -1837,11 +1796,6 @@ body {
     border: none;
     cursor: pointer;
     font-family: inherit;
-}
-
-:root[data-theme="brutalist"] .safety-bubble {
-    border-radius: 0;
-    border: 2px solid var(--border-default);
 }
 
 .safety-bubble.enabled {
@@ -2489,12 +2443,6 @@ body {
     transition: background var(--transition-base);
 }
 
-:root[data-theme="brutalist"] .autostatus-banner {
-    background: var(--accent);
-    color: var(--accent-contrast);
-    border: 3px solid var(--border-default);
-}
-
 .autostatus-banner-left {
     display: flex;
     align-items: center;
@@ -2595,11 +2543,6 @@ body {
 .autostatus-preset-card:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-1px);
-}
-
-:root[data-theme="brutalist"] .autostatus-preset-card:hover {
-    transform: translate(-3px, -3px);
-    box-shadow: 7px 7px 0 var(--border-default);
 }
 
 .autostatus-preset-active {
