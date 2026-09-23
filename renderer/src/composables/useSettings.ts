@@ -18,7 +18,7 @@ const clientVersion = ref('')
 const runtimeDisplay = ref('00:00:00')
 
 /* ----- Theme system additions (style-only, no logic impact) ----- */
-export type ThemePreset = 'aurora' | 'gothic' | 'gothic-purple' | 'terminal'
+export type ThemePreset = 'original' | 'aurora' | 'gothic' | 'gothic-purple' | 'terminal'
 export type Density = 'compact' | 'default' | 'comfortable'
 export type FontScale = 'compact' | 'default' | 'large'
 
@@ -32,7 +32,7 @@ export interface AppearanceSettings {
 }
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
-    preset: 'terminal',
+    preset: 'original',
     density: 'default',
     fontScale: 'default',
     accent: '',
