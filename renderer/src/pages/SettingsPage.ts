@@ -14,6 +14,7 @@ import {
 } from '../composables/useSettings'
 
 const PRESET_OPTIONS: Array<{ value: ThemePreset; label: string; description: string }> = [
+  { value: 'original', label: 'Original', description: 'Flat slate with classic blue accent' },
   { value: 'aurora', label: 'Aurora Soft', description: 'Clean, friendly, modern flat' },
   { value: 'gothic', label: 'Gothic Crimson', description: 'Velvet blacks with deep crimson accents' },
   { value: 'gothic-purple', label: 'Gothic Purple', description: 'Deep violet, glossy, dark cathedral' },
