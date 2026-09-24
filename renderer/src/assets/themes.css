@@ -816,106 +816,134 @@
 /* =====================================================================
  * Theme: Original
  * ---------------------------------------------------------------------
- * Recovers the look the app shipped with between 3ea3b5f (~Aug 2025)
- * and the dark-only redesign: a flat slate-and-blue aesthetic with the
- * classic `#3498db` accent and a `#2ecc71 / #e74c3c / #f39c12` status
- * family. No fancy ornaments — just clean panels, hairline card
- * underlines, and a `#00ff00` neon terminal log block.
+ * Faithful port of the `body.dark-theme` palette from
+ * `3ea3b5f — Added Theme switcher` (Aug 2025), the very first dark
+ * mode in the project. Three slate layers (sidebar / card / input),
+ * every border on `#34495e`, classic `#3498db` blue accent with
+ * focus-lift (border-blue + slate-lighter background, no halo),
+ * `#27ae60 / #e91e63-ish input lift / #e74c3c / #f39c12` status
+ * quartet, no halos on any status dot. Light section header text
+ * in muted `#bdc3c7` over `#1a252f`. Tokens chosen so that the live
+ * `renderer/src/assets/global.css` selectors paint exactly what
+ * `3ea3b5f:body.dark-theme` painted: cards `#34495e`, inputs
+ * `#2c3e50`, even-row alt `#34495e`, focus-bg `#34495e`,
+ * param-item hover `#3498db`, tree-toggle `#34495e`,
+ * tree-child `#2c3e50`, tree-child.active `#27ae60`,
+ * tab `#34495e`, scrollbar-track `#2c3e50`, thumb `#34495e`.
  * ===================================================================== */
 :root[data-theme="original"] {
-    /* Surfaces — flat slate darks (refined 8b37c10 panel/border base) */
-    --surface-0: #1a1a1a;
-    --surface-1: #21252b;
-    --surface-2: #2c3e50;
-    --surface-3: #34495e;
-    --surface-4: #3d566e;
+    /* Surfaces — slate tier
+       s0 = card/primary surface
+       s1 = sidebar (mapped to --sidebar-bg)
+       s2 = input bg
+       s3 = raised inside card
+       s4 = even-row alt / tab */
+    --surface-0: #34495e;          /* card body (lightest slate in dark) */
+    --surface-1: #2c3e50;          /* dark slate */
+    --surface-2: #2c3e50;          /* input bg */
+    --surface-3: #34495e;          /* raised */
+    --surface-4: #34495e;          /* even-row alt */
 
-    /* Text — bone whites with slate tints */
+    /* Text — bone whites on slate */
     --text-primary: #ecf0f1;
     --text-secondary: #bdc3c7;
     --text-tertiary: #95a5a6;
     --text-muted: #7f8c8d;
-    --text-inverse: #1a1a1a;
+    --text-inverse: #2c3e50;
 
-    /* Borders — hairline slate */
+    /* Borders — single slate hairline */
     --border-subtle: #34495e;
-    --border-default: #454545;
+    --border-default: #34495e;
     --border-strong: #5a6478;
 
-    /* Accent — the classic #3498db blue */
+    /* Accent — the classic #3498db blue, no halo */
     --accent: #3498db;
     --accent-hover: #2980b9;
     --accent-active: #1f5f85;
-    --accent-soft: rgba(52, 152, 219, 0.18);
+    --accent-soft: rgba(52, 152, 219, 0.0);
     --accent-contrast: #ffffff;
 
-    /* Status — the classic quartet */
+    /* Status — classic quartet. Inputs/text on dots show with their own
+       hex so that the global.css status indicators stay readable
+       without an extra layer of accent-tinted shadows. */
     --color-success: #27ae60;
-    --color-success-soft: rgba(39, 174, 96, 0.18);
+    --color-success-soft: rgba(39, 174, 96, 0.0);
     --color-warning: #f39c12;
-    --color-warning-soft: rgba(243, 156, 18, 0.18);
+    --color-warning-soft: rgba(243, 156, 18, 0.0);
     --color-danger: #e74c3c;
-    --color-danger-soft: rgba(231, 76, 60, 0.18);
+    --color-danger-soft: rgba(231, 76, 60, 0.0);
     --color-info: #3498db;
-    --color-info-soft: rgba(52, 152, 219, 0.18);
+    --color-info-soft: rgba(52, 152, 219, 0.0);
 
-    /* Radii — matches original `border-radius: 5px / 8px` defaults */
+    /* Radii — original radii: 5px buttons/inputs, 8px cards, 3px small,
+       4px tree-child */
     --radius-sm: calc(3px * var(--radius-scale));
     --radius-md: calc(5px * var(--radius-scale));
     --radius-lg: calc(8px * var(--radius-scale));
     --radius-xl: calc(12px * var(--radius-scale));
     --radius-pill: 999px;
 
-    /* Shadows — plain slate drop shadows, no accent glow */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
-    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
-    --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    /* Shadows — original `0 2px 10px rgba(0,0,0,0.3)` card lift only.
+       Plain slate drop; no colored glow, no halo, no fancy inset. */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 
-    /* Background — subtle slate gradient, evoking the
-       3ea3b5f `#2c3e50 → #34495e` dark body */
+    /* Background — the dark body gradient from 3ea3b5f:
+       `body.dark-theme { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) }`.
+       Same gradient is applied to .app-container in the original. */
     --app-bg:
-        linear-gradient(180deg, #1a1a1a 0%, #2c3e50 100%);
-    --app-bg-solid: #1a1a1a;
+        linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
 
-    /* Sidebar — flat dark slate */
-    --sidebar-bg: #1a1a1a;
+    /* Sidebar — `body.dark-theme .sidebar { background: #1a252f;
+       border-right: 1px solid #34495e }` */
+    --sidebar-bg: #1a252f;
     --sidebar-text: #ecf0f1;
-    --sidebar-text-muted: #95a5a6;
+    --sidebar-text-muted: #bdc3c7;
     --sidebar-section-border: #34495e;
     --main-bg: transparent;
     --main-text: var(--text-primary);
 
-    /* Code/log blocks — classic `#1e1e1e / #00ff00` terminal log */
-    --code-bg: #1e1e1e;
+    /* Log/code blocks — `body.dark-theme .log-container { background:
+       #1a1a1a; border: 1px solid #34495e }` (overrides the light
+       `#1e1e1e`). The page-default neon `#00ff00` stays. */
+    --code-bg: #1a1a1a;
     --code-text: #00ff00;
 
-    /* Effects */
+    /* Effects — keep the standard timings from the existing presets so
+       the user-level accent picker / density controls still operate */
     --backdrop-blur: 0px;
     --card-translucent: 0;
     --hairline: 1px;
     --transition-fast: 150ms ease;
-    --transition-base: 250ms ease;
+    --transition-base: 300ms ease;
     --transition-slow: 400ms ease;
 
-    /* Form inputs */
-    --input-bg: var(--surface-2);
-    --input-border: var(--border-default);
+    /* Form inputs — `body.dark-theme .form-group input { background:
+       #2c3e50; border-color: #34495e; color: #ecf0f1 }`. Focus lifts
+       to `#34495e`; border goes blue. */
+    --input-bg: #2c3e50;
+    --input-border: #34495e;
     --input-focus-border: var(--accent);
     --input-text: var(--text-primary);
     --input-placeholder: var(--text-muted);
 
-    /* Buttons */
+    /* Buttons — original: btn-primary `#3498db`/`#2980b9`,
+       btn-secondary `#95a5a6`/`#7f8c8d` */
     --btn-text: #ffffff;
     --btn-secondary-bg: #95a5a6;
     --btn-secondary-hover: #7f8c8d;
 
-    /* Scrollbar — slate, accent on hover */
+    /* Scrollbar — track `#2c3e50`, thumb `#34495e`, hover `#3498db`
+       (kept by 3ea3b5f except the latter which was added later) */
     --scrollbar-track: #2c3e50;
     --scrollbar-thumb: #34495e;
     --scrollbar-thumb-hover: var(--accent);
 
-    /* Typography — literal original stack (`renderer/style.css` 3ea3b5f) */
+    /* Typography — literal original stack from
+       `body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif }`
+       .log-container font-family was 'Courier New', monospace */
     --font-sans: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     --font-mono: 'Courier New', monospace;
     --font-display: var(--font-sans);
@@ -932,70 +960,242 @@
 /* =====================================================================
  * Original — Theme-specific polish
  * ---------------------------------------------------------------------
- * Hairline underline on card h3 (mirrors the original `sidebar-section
- * h3 { border-bottom: 2px solid #34495e }` rule), classic blue focus
- * ring on inputs, slate-toned page title, plain `.btn-primary` (the
- * existing flashy/bling system in global.css still applies the sheen
- * + halo at runtime via `var(--accent)`).
+ * The token block above sets the slate/blue surface colors; the rules
+ * below replicate the `body.dark-theme` overrides one-for-one so the
+ * live component selectors paint what the original dark mode painted.
+ * Empty `:root[data-theme="original"]` block omitted (the rules below
+ * are scoped directly to elements so they're easier to read alongside
+ * the originals).
  * ===================================================================== */
-:root[data-theme="original"] {
-    --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.6);
+
+/* Cards: `body.dark-theme .card { background: #34495e; color: #ecf0f1;
+   box-shadow: 0 2px 10px rgba(0,0,0,0.3) }` */
+:root[data-theme="original"] .card {
+    background: var(--surface-0);
+    color: var(--text-primary);
+    border: none;
+    box-shadow: var(--shadow-md);
 }
 
-/* Hairline section dividers — the original signature */
-:root[data-theme="original"] .card h3,
+/* Page heading: `body.dark-theme .header h1 { color: #ecf0f1 }` */
+:root[data-theme="original"] .header h1 {
+    color: var(--text-primary);
+    text-shadow: none;
+    letter-spacing: 0;
+    text-align: center;
+}
+:root[data-theme="original"] .header p {
+    color: var(--text-secondary);
+}
+
+/* Sidebar section headings: `body.dark-theme .sidebar-section h3
+   { color: #bdc3c7; border-bottom-color: #34495e }` */
 :root[data-theme="original"] .sidebar-section h3 {
+    color: var(--text-secondary);
     border-bottom: 2px solid var(--border-default);
-    padding-bottom: var(--space-3);
-    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-2);
     letter-spacing: 0;
     text-transform: none;
 }
+:root[data-theme="original"] .sidebar {
+    border-right: 1px solid var(--border-default);
+    box-shadow: none;
+}
 
-/* Classic blue focus ring on form fields */
+/* Inputs: `body.dark-theme .form-group input { background: #2c3e50;
+   border-color: #34495e; color: #ecf0f1 }`. Focus:
+   `border-color: #3498db; background: #34495e`. */
+:root[data-theme="original"] .form-group input,
+:root[data-theme="original"] .form-group select,
+:root[data-theme="original"] .form-group textarea,
+:root[data-theme="original"] .autostatus-field input,
+:root[data-theme="original"] .autostatus-field select {
+    background: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--input-text);
+}
 :root[data-theme="original"] .form-group input:focus,
 :root[data-theme="original"] .form-group select:focus,
 :root[data-theme="original"] .form-group textarea:focus,
 :root[data-theme="original"] .autostatus-field input:focus,
 :root[data-theme="original"] .autostatus-field select:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    background: var(--surface-0);
+    box-shadow: none;
     outline: none;
 }
 
-/* Plain page title — no glow, no shadow, just the accent */
-:root[data-theme="original"] .header h1 {
-    color: var(--accent);
-    font-weight: 700;
-    letter-spacing: 0;
-    text-align: center;
-    text-shadow: none;
+/* Parameter rows: `body.dark-theme .parameter-item { background:
+   #2c3e50; border-color: #34495e }`;
+   `:nth-child(even) { background: #34495e }`;
+   `:hover { background: #3498db }`. */
+:root[data-theme="original"] .parameter-item {
+    background: var(--surface-1);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+}
+:root[data-theme="original"] .parameter-item:nth-child(even) {
+    background: var(--surface-0);
+}
+:root[data-theme="original"] .parameter-item:hover {
+    background: var(--accent);
+}
+:root[data-theme="original"] .parameter-item:hover span {
+    color: #ffffff;
 }
 
-/* Status indicator dot — clean colored dot, no halo */
+/* Tabs: `body.dark-theme .tab { background: #34495e; color: #ecf0f1 }`
+   `body.dark-theme .tab.active { background: #3498db }` */
+:root[data-theme="original"] .tab {
+    background: var(--surface-0);
+    color: var(--text-primary);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+:root[data-theme="original"] .tab.active {
+    background: var(--accent);
+    color: #ffffff;
+}
+
+/* Tree controls: `body.dark-theme .tree-toggle { background:
+   #34495e }`; `:hover { background: #3498db }`.
+   `body.dark-theme .tree-child { background: #2c3e50 }`;
+   `:hover { background: #3498db }`;
+   `.active { background: #27ae60 }`. */
+:root[data-theme="original"] .tree-toggle {
+    background-color: var(--surface-0);
+    color: var(--text-primary);
+    border: none;
+    border-radius: var(--radius-md);
+}
+:root[data-theme="original"] .tree-toggle:hover {
+    background-color: var(--accent);
+    color: #ffffff;
+}
+:root[data-theme="original"] .tree-child {
+    background-color: var(--surface-1);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+}
+:root[data-theme="original"] .tree-child:hover {
+    background-color: var(--accent);
+    color: #ffffff;
+}
+:root[data-theme="original"] .tree-child.active {
+    background-color: #27ae60;
+    color: #ffffff;
+}
+
+/* Connection status row: `body.dark-theme .connection-status
+   { background-color: #ffffff0d }` */
+:root[data-theme="original"] .connection-status {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+}
+
+/* Status indicator dots — original `.status-indicator { background
+   <color> }` (no halo). The color tokens set the base; this
+   explicitly opts out of any later `:focus-visible` ring / glow. */
 :root[data-theme="original"] .status-connected {
     background-color: var(--color-success);
-    box-shadow: 0 0 8px rgba(39, 174, 96, 0.4);
+    box-shadow: none;
 }
 :root[data-theme="original"] .status-disconnected {
     background-color: var(--color-danger);
-    box-shadow: 0 0 8px rgba(231, 76, 60, 0.4);
+    box-shadow: none;
 }
 :root[data-theme="original"] .status-connecting,
 :root[data-theme="original"] .status-pending {
     background-color: var(--color-warning);
-    box-shadow: 0 0 8px rgba(243, 156, 18, 0.4);
+    box-shadow: none;
 }
 
-/* Log container — the original's #1e1e1e/#00ff00 terminal look;
-   here we just make sure the block reads as terminal even when the
-   page uses the softer body code palette. */
+/* Log container — `body.dark-theme .log-container { background:
+   #1a1a1a; border: 1px solid #34495e }`. The `:root { .log-container
+   { color: #00ff00; font-family: 'Courier New', monospace } }` base
+   rule covers the text + font. */
 :root[data-theme="original"] .log-container {
     background: var(--code-bg);
-    color: var(--code-text);
-    font-family: var(--font-mono);
     border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+}
+
+/* Buttons — original `.btn { padding: 10px 20px; border: none;
+   border-radius: 5px; cursor: pointer; font-size: 14px;
+   font-weight: 600; transition: all 0.3s ease }`. The existing
+   flashy/bling system in global.css still operates on `.btn-primary`;
+   we add a flat, plain fallback against the `--accent` gradient in
+   case global.css doesn't paint exactly the original. */
+:root[data-theme="original"] .btn {
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    padding: 10px 20px;
+    font-size: 14px;
+    border: none;
+    transition: all 0.3s ease;
+}
+:root[data-theme="original"] .btn-primary {
+    /* Plain solid blue, no sheen / no halo — matches the original
+       `body:not(.dark-theme) .btn-primary { background-color: #3498db }` */
+    background: var(--accent) !important;
+    color: var(--accent-contrast) !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+:root[data-theme="original"] .btn-primary:hover {
+    background: var(--accent-hover) !important;
+    color: var(--accent-contrast) !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+:root[data-theme="original"] .btn-secondary {
+    background-color: #95a5a6;
+    color: #ffffff;
+}
+:root[data-theme="original"] .btn-secondary:hover {
+    background-color: #7f8c8d;
+}
+:root[data-theme="original"] .btn-warning {
+    background-color: #f39c12;
+    color: #ffffff;
+}
+:root[data-theme="original"] .btn-warning:hover {
+    background-color: #e67e22;
+}
+:root[data-theme="original"] .btn-success {
+    background-color: #27ae60;
+    color: #ffffff;
+}
+:root[data-theme="original"] .btn-danger {
+    background-color: #e74c3c;
+    color: #ffffff;
+}
+
+/* Sidebar nav buttons: `body.dark-theme .navigation-section .btn.active
+   { background-color: #27973a; color: #ffffff; cursor: default;
+   box-shadow: none; opacity: 0.85; }` */
+:root[data-theme="original"] .nav-btn.active,
+:root[data-theme="original"] .nav-btn[aria-current="page"] {
+    background-color: #27973a;
+    color: #ffffff;
+    box-shadow: none;
+    opacity: 0.85;
+}
+
+/* OSC connection item (legacy) — `body.dark-theme .osc-connection-item
+   { background-color: rgba(52, 73, 94, 0.3) !important; border-color:
+   #34495e !important }` */
+:root[data-theme="original"] .osc-connection-item {
+    background-color: rgba(52, 73, 94, 0.3) !important;
+    border-color: var(--border-default) !important;
+}
+
+/* Smaller paragraphs inside a dark card: original had two `body.dark-theme
+   small` blocks — `color: #bdc3c7 !important` and `color: #95a5a6`;
+   the lighter of the two wins. */
+:root[data-theme="original"] small {
+    color: #bdc3c7;
 }
 
 /* =====================================================================
