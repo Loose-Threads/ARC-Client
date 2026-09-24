@@ -16,8 +16,8 @@
         var a = raw ? JSON.parse(raw) : null;
         var r = document.documentElement;
         if (!a) {
-          // First launch defaults: Original
-          r.setAttribute('data-theme', 'original');
+          // First launch defaults: Terminal Mono
+          r.setAttribute('data-theme', 'terminal');
           return;
         }
         if (a.preset) r.setAttribute('data-theme', a.preset);
