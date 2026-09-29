@@ -29,29 +29,45 @@ interface OscService {
   isListening: boolean
   sendMessage(address: string, value: number, type: string): void
 }
-class HyperateAddon {
-  enabled: boolean
+
+// Per-tracker connection slot. Each tracker gets its own WebSocket because
+// HypeRate's Phoenix Channels backend only delivers hr_update events for a
+// single subscribed topic per socket — joining multiple hr:X topics on one
+// socket silently drops all but one. Keeping each tracker on its own
+// connection side-steps the fan-out limitation.
+interface ConnectionSlot {
   ws: WebSocket | null
   heartbeatInterval: ReturnType<typeof setInterval> | null
   reconnectTimeout: ReturnType<typeof setTimeout> | null
+  watchdogInterval: ReturnType<typeof setInterval> | null
+  watchdogCount: number
+  lastHrUpdate: number | null
+  reconnectAttempts: number
+  cancelled: boolean
+}
+
+class HyperateAddon {
+  enabled: boolean
+  // Map<trackerId, ConnectionSlot>. One entry per tracker; tracks each WS
+  // lifecycle independently so adding/removing trackers doesn't disturb the
+  // others, and reconnects happen per-tracker rather than globally.
+  connections: Map<string, ConnectionSlot>
   trackers: Map<string, TrackerData>
   primaryTracker: string | null
   secrets: HyperateSecrets | null
   config: HyperateConfig
   lastHeartRate: number
-  reconnectAttempts: number
-  maxReconnectAttempts: number
   reconnectDelay: number
+  maxReconnectAttempts: number
   trackerNames: Record<string, string>
   trackerStates: Record<string, boolean>
   onStatusChange: ((status: ReturnType<HyperateAddon['getStatus']>) => void) | null
   onHeartRateUpdate: ((data: { heartRate: number, deviceId: string }) => void) | null
   lastError: string | null
-  reconnecting: boolean
+  // True when at least one per-tracker loop is in a backoff/reconnect cycle.
+  // Drives `reconnecting` in getStatus() for UI; computed from any slot's
+  // reconnectTimeout presence rather than stored as a single flag.
   oscService: OscService | null
-  lastHrUpdate: number | null
-  watchdogInterval: ReturnType<typeof setInterval> | null
-  watchdogCount: number
   readonly STALE_THRESHOLD_MS: number
   // HR history DB members
   private hrFlushTimer: ReturnType<typeof setInterval> | null
@@ -71,15 +87,12 @@ class HyperateAddon {
   }
   constructor() {
     this.enabled = false
-    this.ws = null
-    this.heartbeatInterval = null
-    this.reconnectTimeout = null
+    this.connections = new Map()
     this.trackers = new Map()
     this.primaryTracker = null
     this.secrets = this.loadSecrets()
     this.config = this.loadConfig()
     this.lastHeartRate = 0
-    this.reconnectAttempts = 0
     this.maxReconnectAttempts = 5
     this.reconnectDelay = 10000 // 10 seconds
     this.primaryTracker = this.config.primaryTracker || null
@@ -88,11 +101,7 @@ class HyperateAddon {
     this.onStatusChange = null // Callback for status changes
     this.onHeartRateUpdate = null // Callback for heart rate updates
     this.lastError = null // Last error message for UI display
-    this.reconnecting = false // Whether currently waiting to reconnect
     this.oscService = null
-    this.lastHrUpdate = null
-    this.watchdogInterval = null
-    this.watchdogCount = 0
     this.STALE_THRESHOLD_MS = 3 * 60 * 1000 // 3 minutes — matches HypeRDesktop STALE_SECS
     this.hrFlushTimer = null
     this.hrCleanupTimer = null
@@ -193,12 +202,14 @@ class HyperateAddon {
     this.enabled = true
     this.oscService = oscService // OSC service is optional
     this.lastError = null // Clear any previous errors
-    this.reconnecting = false
-    this.reconnectAttempts = 0
     this.prepareHrStatement()
     this.startHrTimers()
     this.notifyStatusChange() // Notify UI of state change immediately
-    this.connect()
+    // Spawn one connection loop per tracker currently in config (config.json
+    // order — see this.getTrackers() which iterates this.config.trackers).
+    // Each loop manages its own WS, heartbeat, watchdog, and reconnect so
+    // adding/removing one tracker never disturbs the others.
+    this.startAllTrackers()
     debug.info('HypeRate addon started')
     return true
   }
@@ -209,263 +220,247 @@ class HyperateAddon {
     }
     debug.info('HypeRate addon stopping...')
     this.enabled = false
-    this.reconnecting = false
     this.lastError = null // Clear error on manual stop
-    this.disconnect()
+    this.stopAllTrackers()
     this.stopHrTimers()
     this.flushHrBuffer()
     this.notifyStatusChange() // Notify UI of state change immediately
     debug.info('HypeRate addon stopped successfully')
   }
-  connect(): void {
-    this.secrets = this.loadSecrets()
+  /** Spawn a connection loop for every tracker in config.trackers, in order. */
+  startAllTrackers(): void {
+    const ids = this.config.trackers || []
+    for (const id of ids) {
+      this.startTracker(id)
+    }
+  }
+  /** Tear down every per-tracker connection loop. */
+  stopAllTrackers(): void {
+    for (const id of Array.from(this.connections.keys())) {
+      this.stopTracker(id)
+    }
+  }
+  /**
+   * Open (or reuse) a connection loop for a single tracker. Idempotent: a
+   * no-op if a slot already exists for this id.
+   */
+  startTracker(deviceId: string): void {
+    if (!this.enabled) return
     if (!this.secrets || !this.secrets.hyperate || !this.secrets.hyperate.apiKey) {
-      debug.logError('Cannot connect to HypeRate: No API key')
+      debug.logError(`Cannot start tracker ${deviceId}: No API key`)
       return
     }
-    const apiKey = this.secrets.hyperate.apiKey
+    if (this.connections.has(deviceId)) {
+      // Already running — nothing to do. (Re)joinChannel on demand is
+      // handled by joinChannel() below.
+      return
+    }
+    const slot: ConnectionSlot = {
+      ws: null,
+      heartbeatInterval: null,
+      reconnectTimeout: null,
+      watchdogInterval: null,
+      watchdogCount: 0,
+      lastHrUpdate: null,
+      reconnectAttempts: 0,
+      cancelled: false
+    }
+    this.connections.set(deviceId, slot)
+    // Insert into this.trackers as well so getTrackers() reports it.
+    if (!this.trackers.has(deviceId)) {
+      this.trackers.set(deviceId, { joinedAt: Date.now(), lastHeartRate: 0 })
+    }
+    this.connectTracker(deviceId)
+  }
+  /** Close + cleanup a single tracker's loop. */
+  stopTracker(deviceId: string): void {
+    const slot = this.connections.get(deviceId)
+    if (!slot) return
+    slot.cancelled = true
+    // Best-effort phx_leave
+    if (slot.ws && slot.ws.readyState === WebSocket.OPEN) {
+      try {
+        slot.ws.send(JSON.stringify({
+          topic: `hr:${deviceId}`,
+          event: 'phx_leave',
+          payload: {},
+          ref: 0
+        }))
+      } catch (e) {
+        debug.warn(`[hyperate] phx_leave send failed for ${deviceId}: ${(e as Error).message}`)
+      }
+    }
+    if (slot.heartbeatInterval) { clearInterval(slot.heartbeatInterval); slot.heartbeatInterval = null }
+    if (slot.watchdogInterval) { clearInterval(slot.watchdogInterval); slot.watchdogInterval = null }
+    if (slot.reconnectTimeout) { clearTimeout(slot.reconnectTimeout); slot.reconnectTimeout = null }
+    if (slot.ws) {
+      try { slot.ws.removeAllListeners() } catch { /* ignore */ }
+      try {
+        if (slot.ws.readyState === WebSocket.OPEN || slot.ws.readyState === WebSocket.CONNECTING) {
+          slot.ws.close()
+        }
+      } catch { /* ignore */ }
+      slot.ws = null
+    }
+    this.connections.delete(deviceId)
+    // Keep this.trackers intact so the UI still shows the row at the right
+    // position with isActive:false until the user explicitly removes it.
+    debug.info(`[hyperate] stopped connection for ${deviceId}`)
+  }
+  /** Open a fresh WebSocket for the given tracker and wire up the lifecycle. */
+  connectTracker(deviceId: string): void {
+    const slot = this.connections.get(deviceId)
+    if (!slot) return
+    if (slot.cancelled) return
+    const apiKey = this.secrets!.hyperate!.apiKey
     const apiUrl = `wss://app.hyperate.io/socket/websocket?token=${apiKey}`
+    debug.info(`[hyperate:${deviceId}] connecting...`)
     try {
-      this.ws = new WebSocket(apiUrl)
-      this.ws.on('open', () => {
-        this.reconnectAttempts = 0
-        this.lastError = null
-        this.reconnecting = false
-        this.lastHrUpdate = null
-        this.watchdogCount = 0
-        debug.info('Connected to HypeRate WebSocket')
-        this.setupHeartbeat()
-        this.setupWatchdog()
-        this.loadSavedTrackers()
-        this.notifyStatusChange()
-      })
-      this.ws.on('close', (code: number, reason: Buffer) => {
-        debug.info('HypeRate connection closed')
-        this.removeAllListeners()
-        this.cleanup()
-        if (this.enabled && !this.lastError) {
-          this.lastError = 'Connection closed unexpectedly'
-        }
-        this.notifyStatusChange()
-        // Only reconnect if still enabled and not manually stopped
-        if (this.enabled && !this.reconnecting) {
-          this.scheduleReconnect()
-        }
-      })
-      this.ws.on('error', (error: Error) => {
-        debug.logError(`HypeRate connection error: ${error.message}`)
-        this.lastError = error.message || 'Connection error'
-        this.removeAllListeners()
-        this.cleanup()
-        this.notifyStatusChange()
-        // Only reconnect if still enabled and not manually stopped
-        if (this.enabled && !this.reconnecting) {
-          this.scheduleReconnect()
-        }
-      })
-      this.ws.on('message', (data: WebSocket.RawData) => {
+      const ws = new WebSocket(apiUrl)
+      slot.ws = ws
+      ws.on('open', () => {
+        if (slot.cancelled) { try { ws.close() } catch { /* ignore */ } return }
+        slot.reconnectAttempts = 0
+        slot.lastHrUpdate = null
+        slot.watchdogCount = 0
+        debug.info(`[hyperate:${deviceId}] connected`)
+        // Join this tracker's topic immediately. Each socket only subscribes
+        // to one hr:X topic to avoid the HypeRate fan-out limitation.
         try {
-          const message = JSON.parse(data.toString())
-          this.handleMessage(message)
-        } catch (error) {
-          debug.logError(`HypeRate message parse error: ${(error as Error).message}`)
-        }
-      })
-      debug.info('Connecting to HypeRate API...')
-    } catch (error) {
-      debug.logError(`Failed to create HypeRate WebSocket: ${(error as Error).message}`)
-      this.scheduleReconnect()
-    }
-  }
-  disconnect(): void {
-    debug.info('HypeRate disconnecting...')
-    // Leave all active channels before disconnecting
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN)) {
-      const trackerIds = Array.from(this.trackers.keys())
-      if (trackerIds.length > 0) {
-        debug.info(`Leaving ${trackerIds.length} active channel(s)...`)
-        trackerIds.forEach(deviceId => {
-          try {
-            const message = {
-              topic: `hr:${deviceId}`,
-              event: "phx_leave",
-              payload: {},
-              ref: 0
-            }
-            this.ws!.send(JSON.stringify(message))
-            debug.info(`Left channel: ${deviceId}`)
-          } catch (error) {
-            debug.warn(`Failed to leave channel ${deviceId}: ${(error as Error).message}`)
-          }
-        })
-      }
-    }
-    
-    // Clear trackers map
-    const trackerCount = this.trackers.size
-    this.trackers.clear()
-    if (trackerCount > 0) {
-      debug.info(`Cleared ${trackerCount} tracker(s) from memory`)
-    }
-    
-    // Clean up intervals and timeouts
-    this.cleanup()
-    
-    // Remove all event listeners and close WebSocket
-    if (this.ws) {
-      this.removeAllListeners()
-      const wsState = this.ws.readyState
-      if (wsState === WebSocket.OPEN || wsState === WebSocket.CONNECTING) {
-        this.ws.close()
-        debug.info('WebSocket connection closed')
-      } else {
-        debug.info(`WebSocket already closed (state: ${wsState})`)
-      }
-      this.ws = null
-    }
-    debug.info('HypeRate disconnect completed')
-  }
-  removeAllListeners(): void {
-    if (this.ws) {
-      this.ws.removeAllListeners('open')
-      this.ws.removeAllListeners('close')
-      this.ws.removeAllListeners('error')
-      this.ws.removeAllListeners('message')
-    }
-  }
-  cleanup(): void {
-    let cleaned = false
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval)
-      this.heartbeatInterval = null
-      cleaned = true
-      debug.info('Cleared heartbeat interval')
-    }
-    if (this.watchdogInterval) {
-      clearInterval(this.watchdogInterval)
-      this.watchdogInterval = null
-      cleaned = true
-      debug.info('Cleared watchdog interval')
-    }
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout)
-      this.reconnectTimeout = null
-      cleaned = true
-      debug.info('Cleared reconnect timeout')
-    }
-    if (cleaned) {
-      debug.info('HypeRate cleanup completed')
-    }
-  }
-  scheduleReconnect(): void {
-    if (!this.enabled || this.reconnectTimeout) {
-      return
-    }
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      debug.warn(`HypeRate: ${this.maxReconnectAttempts} reconnect attempts reached — resetting counter and retrying`)
-      this.reconnectAttempts = 0
-    }
-    this.reconnectAttempts++
-    this.reconnecting = true
-    this.notifyStatusChange()
-    debug.info(`HypeRate: Scheduling reconnect attempt ${this.reconnectAttempts} in ${this.reconnectDelay / 1000} seconds`)
-    this.reconnectTimeout = setTimeout(() => {
-      this.reconnectTimeout = null
-      this.reconnecting = false
-      if (this.enabled) {
-        this.connect()
-      }
-    }, this.reconnectDelay)
-  }
-  setupHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval)
-    }
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        try {
-          this.ws.send(JSON.stringify({
-            topic: "phoenix",
-            event: "heartbeat",
+          ws.send(JSON.stringify({
+            topic: `hr:${deviceId}`,
+            event: 'phx_join',
             payload: {},
             ref: 0
           }))
+          debug.info(`[hyperate:${deviceId}] phx_join sent`)
+        } catch (e) {
+          debug.warn(`[hyperate:${deviceId}] phx_join failed: ${(e as Error).message}`)
+        }
+        this.setupHeartbeat(deviceId)
+        this.setupWatchdog(deviceId)
+        // Emit a snapshot so the UI re-renders with isActive:true for this
+        // tracker.
+        this.notifyStatusChange()
+      })
+      ws.on('close', () => {
+        debug.info(`[hyperate:${deviceId}] connection closed`)
+        if (slot.heartbeatInterval) { clearInterval(slot.heartbeatInterval); slot.heartbeatInterval = null }
+        if (slot.watchdogInterval) { clearInterval(slot.watchdogInterval); slot.watchdogInterval = null }
+        slot.ws = null
+        this.notifyStatusChange()
+        if (this.enabled && !slot.cancelled) {
+          this.scheduleReconnect(deviceId)
+        }
+      })
+      ws.on('error', (error: Error) => {
+        debug.logError(`[hyperate:${deviceId}] WS error: ${error.message}`)
+        if (!this.lastError) this.lastError = error.message || 'Connection error'
+        this.notifyStatusChange()
+      })
+      ws.on('message', (data: WebSocket.RawData) => {
+        try {
+          const message = JSON.parse(data.toString())
+          this.handleMessage(deviceId, message)
         } catch (error) {
-          debug.warn(`HypeRate heartbeat send failed: ${(error as Error).message} — forcing reconnect`)
-          this.cleanup()
-          if (this.ws) {
-            this.removeAllListeners()
-            this.ws.close()
-            this.ws = null
-          }
-          if (this.enabled && !this.reconnecting) {
-            this.scheduleReconnect()
-          }
+          debug.logError(`[hyperate:${deviceId}] message parse error: ${(error as Error).message}`)
         }
-      }
-    }, 30000) // 30 seconds as recommended
-  }
-  setupWatchdog(): void {
-    if (this.watchdogInterval) {
-      clearInterval(this.watchdogInterval)
+      })
+    } catch (error) {
+      debug.logError(`[hyperate:${deviceId}] failed to create WebSocket: ${(error as Error).message}`)
+      this.scheduleReconnect(deviceId)
     }
-    this.watchdogCount = 0
-    this.watchdogInterval = setInterval(() => {
-      if (this.trackers.size === 0) return
-      const now = Date.now()
-      const stale = this.lastHrUpdate === null || (now - this.lastHrUpdate) > this.STALE_THRESHOLD_MS
-      if (!stale) {
-        this.watchdogCount = 0
-        return
+  }
+  /** Schedule a single tracker's reconnect after a closed/failed socket. */
+  scheduleReconnect(deviceId: string): void {
+    const slot = this.connections.get(deviceId)
+    if (!slot || slot.cancelled) return
+    if (slot.reconnectTimeout) return
+    if (slot.reconnectAttempts >= this.maxReconnectAttempts) {
+      debug.warn(`[hyperate:${deviceId}] max reconnect attempts reached — resetting counter`)
+      slot.reconnectAttempts = 0
+    }
+    slot.reconnectAttempts++
+    debug.info(`[hyperate:${deviceId}] scheduling reconnect attempt ${slot.reconnectAttempts} in ${this.reconnectDelay / 1000}s`)
+    slot.reconnectTimeout = setTimeout(() => {
+      slot.reconnectTimeout = null
+      if (this.enabled && !slot.cancelled) {
+        this.connectTracker(deviceId)
       }
-      this.watchdogCount++
-      const since = this.lastHrUpdate
-        ? `${Math.round((now - this.lastHrUpdate) / 1000)}s ago`
-        : 'never'
-      if (this.watchdogCount >= 2) {
-        debug.warn(`HypeRate watchdog: ${this.watchdogCount} stale checks — forcing reconnect (last HR: ${since})`)
-        this.cleanup()
-        if (this.ws) {
-          this.removeAllListeners()
-          this.ws.close()
-          this.ws = null
-        }
-        this.reconnectAttempts = 0
-        this.reconnecting = false
-        if (this.enabled) {
-          this.scheduleReconnect()
-        }
-      } else {
-        debug.warn(`HypeRate watchdog: no HR data for ${since} — re-joining ${this.trackers.size} channel(s)`)
-        Array.from(this.trackers.keys()).forEach(id => this.joinChannel(id))
+    }, this.reconnectDelay)
+    this.notifyStatusChange()
+  }
+  /** Per-tracker heartbeat. */
+  setupHeartbeat(deviceId: string): void {
+    const slot = this.connections.get(deviceId)
+    if (!slot) return
+    if (slot.heartbeatInterval) clearInterval(slot.heartbeatInterval)
+    slot.heartbeatInterval = setInterval(() => {
+      if (!slot.ws || slot.ws.readyState !== WebSocket.OPEN) return
+      try {
+        slot.ws.send(JSON.stringify({
+          topic: 'phoenix',
+          event: 'heartbeat',
+          payload: {},
+          ref: 0
+        }))
+      } catch (error) {
+        debug.warn(`[hyperate:${deviceId}] heartbeat send failed: ${(error as Error).message}`)
+        try { slot.ws!.close() } catch { /* ignore */ }
       }
     }, 30000)
   }
-  loadSavedTrackers(): void {
-    // Load trackers from saved config
-    if (this.config.trackers && Array.isArray(this.config.trackers)) {
-      debug.info(`Loading ${this.config.trackers.length} saved tracker(s): ${this.config.trackers.join(', ')}`)
-      this.config.trackers.forEach(deviceId => {
-        this.joinChannel(deviceId)
-      })
-    } else {
-      debug.info('No saved trackers found in config')
-    }
+  /** Per-tracker watchdog: re-join or force reconnect on stale data. */
+  setupWatchdog(deviceId: string): void {
+    const slot = this.connections.get(deviceId)
+    if (!slot) return
+    if (slot.watchdogInterval) clearInterval(slot.watchdogInterval)
+    slot.watchdogCount = 0
+    slot.watchdogInterval = setInterval(() => {
+      const now = Date.now()
+      const stale = slot.lastHrUpdate === null || (now - slot.lastHrUpdate) > this.STALE_THRESHOLD_MS
+      if (!stale) {
+        slot.watchdogCount = 0
+        return
+      }
+      slot.watchdogCount++
+      const since = slot.lastHrUpdate
+        ? `${Math.round((now - slot.lastHrUpdate) / 1000)}s ago`
+        : 'never'
+      if (slot.watchdogCount >= 2) {
+        debug.warn(`[hyperate:${deviceId}] watchdog: ${slot.watchdogCount} stale checks — forcing reconnect (last HR: ${since})`)
+        slot.reconnectAttempts = 0
+        try { slot.ws?.close() } catch { /* ignore */ }
+      } else {
+        debug.warn(`[hyperate:${deviceId}] watchdog: no HR for ${since} — re-joining (attempt ${slot.watchdogCount})`)
+        if (slot.ws && slot.ws.readyState === WebSocket.OPEN) {
+          try {
+            slot.ws.send(JSON.stringify({
+              topic: `hr:${deviceId}`,
+              event: 'phx_join',
+              payload: {},
+              ref: 0
+            }))
+          } catch (e) {
+            debug.warn(`[hyperate:${deviceId}] watchdog phx_join failed: ${(e as Error).message}`)
+          }
+        }
+      }
+    }, 30000)
   }
+  /** Backwards-compat: no longer needed (each tracker auto-starts on add), but
+   *  kept so any external callers don't break. Just delegates to startAllTrackers. */
+  loadSavedTrackers(): void {
+    debug.info('loadSavedTrackers() is a no-op now; trackers start via startAllTrackers()')
+  }
+  /** Public API: ensure a tracker has a live connection. Idempotent. */
   joinChannel(deviceId: string): boolean {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      debug.warn(`Cannot join HypeRate channel ${deviceId}: Not connected`)
+    if (!this.enabled) {
+      debug.warn(`Cannot join HypeRate channel ${deviceId}: addon not enabled`)
       return false
     }
-    const message = {
-      topic: `hr:${deviceId}`,
-      event: "phx_join",
-      payload: {},
-      ref: 0
-    }
-    this.ws.send(JSON.stringify(message))
-    this.trackers.set(deviceId, { joinedAt: Date.now(), lastHeartRate: 0 })
-    // Set as primary if no primary exists
+    this.startTracker(deviceId)
+    // Set as primary if no primary exists.
     if (!this.primaryTracker) {
       this.primaryTracker = deviceId
       this.saveConfig()
@@ -473,60 +468,64 @@ class HyperateAddon {
     debug.info(`Joined HypeRate channel: ${deviceId}`)
     return true
   }
+  /** Public API: stop a tracker's connection (data still in config). */
   leaveChannel(deviceId: string): boolean {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      // Still remove from trackers even if not connected
-      this.trackers.delete(deviceId)
-      return false
-    }
-    const message = {
-      topic: `hr:${deviceId}`,
-      event: "phx_leave",
-      payload: {},
-      ref: 0
-    }
-    this.ws.send(JSON.stringify(message))
-    this.trackers.delete(deviceId)
-    // If removing primary tracker, set new primary
+    this.stopTracker(deviceId)
+    // If removing primary tracker, set new primary based on remaining config.
     if (this.primaryTracker === deviceId) {
-      const remainingTrackers = Array.from(this.trackers.keys())
-      this.primaryTracker = remainingTrackers.length > 0 ? remainingTrackers[0] : null
+      const remaining = (this.config.trackers || []).filter(id => id !== deviceId)
+      this.primaryTracker = remaining.length > 0 ? remaining[0] : null
       this.saveConfig()
     }
     debug.info(`Left HypeRate channel: ${deviceId}`)
     return true
   }
-  handleMessage(data: { event: string, topic: string, payload: unknown }): void {
+  handleMessage(slotId: string, data: { event: string, topic: string, payload: unknown }): void {
+    // Each slot only subscribes to its own topic, so any hr_update arriving
+    // here is for slotId. (We still cross-check the topic defensively in
+    // case HypeRate ever broadcasts on a different topic.)
     if (data.event === "hr_update") {
-      this.handleHeartRateUpdate(data as { event: string, topic: string, payload: { hr: number } })
+      this.handleHeartRateUpdate(slotId, data as { event: string, topic: string, payload: { hr: number } })
     }
   }
-  handleHeartRateUpdate(data: { event: string, topic: string, payload: { hr: number } }): void {
+  handleHeartRateUpdate(slotId: string, data: { event: string, topic: string, payload: { hr: number } }): void {
     try {
-      const deviceId = data.topic.split(":")[1]
+      const topicId = data.topic.split(":")[1]
       const heartRate = data.payload.hr
-      if (!deviceId || typeof heartRate !== 'number') {
-        debug.warn('Invalid heart rate data received')
+      if (!topicId || typeof heartRate !== 'number') {
+        debug.warn(`[hyperate] Invalid heart rate data received on slot ${slotId}`)
         return
       }
-      // Update tracker data
+      // Defensive: ensure the message topic matches the slot that received it.
+      if (topicId !== slotId) {
+        debug.warn(`[hyperate] hr_update topic ${topicId} != slot ${slotId}; ignoring (cross-topic leak)`)
+        return
+      }
+      const deviceId = slotId
+      // Update per-slot watchdog state.
+      const slot = this.connections.get(deviceId)
+      if (slot) {
+        slot.lastHrUpdate = Date.now()
+        slot.watchdogCount = 0
+      }
+      // Update tracker data (shared `this.trackers` map).
       if (this.trackers.has(deviceId)) {
         const tracker = this.trackers.get(deviceId)!
         tracker.lastHeartRate = heartRate
         tracker.lastUpdate = Date.now()
         this.trackers.set(deviceId, tracker)
       }
-      this.lastHrUpdate = Date.now()
-      this.watchdogCount = 0
       this.bufferHrReading(deviceId, heartRate)
-      // Only update lastHeartRate and send to VRChat if this is the primary tracker
+      // Always notify the renderer of per-tracker updates so non-primary
+      // trackers update live instead of waiting on the 2s polling fallback.
+      if (typeof this.onHeartRateUpdate === 'function') {
+        this.onHeartRateUpdate({ heartRate, deviceId })
+      }
+      // Only the primary drives the OSC parameter + the legacy lastHeartRate
+      // field on status (used by getStatus() / polling refresh).
       if (deviceId === this.primaryTracker) {
         this.lastHeartRate = heartRate
         this.sendHeartRateToVRChat(heartRate)
-        // Notify renderer of heart rate update
-        if (typeof this.onHeartRateUpdate === 'function') {
-          this.onHeartRateUpdate({ heartRate, deviceId })
-        }
       }
     } catch (error) {
       debug.logError(`Error handling heart rate update: ${(error as Error).message}`)
@@ -565,10 +564,12 @@ class HyperateAddon {
     }
     // Save configuration regardless of connection state
     this.saveConfig()
-    // Try to join channel if connected, but don't fail if not connected
-    if (this.enabled && this.ws && this.ws.readyState === WebSocket.OPEN) {
+    // If the addon is enabled, kick off a per-tracker connection loop for the
+    // newly-added id. Otherwise the connection will start on the next
+    // startAllTrackers() call (i.e. when the user enables the addon).
+    if (this.enabled) {
       this.joinChannel(deviceId)
-      debug.info(`Added and joined HypeRate tracker: ${deviceId}`)
+      debug.info(`Added and started HypeRate tracker: ${deviceId}`)
     } else {
       debug.info(`Added HypeRate tracker: ${deviceId} (will connect when HypeRate starts)`)
     }
@@ -583,14 +584,13 @@ class HyperateAddon {
       debug.warn(`Tracker ${deviceId} not found`)
       return false
     }
-    // Remove from active trackers if connected
-    if (existsInActive && this.enabled && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.leaveChannel(deviceId)
-    } else if (existsInActive) {
-      // Remove from active trackers map even if not connected
-      this.trackers.delete(deviceId)
+    // Always tear down the connection slot (if any) for the removed tracker.
+    if (this.connections.has(deviceId)) {
+      this.stopTracker(deviceId)
     }
-    // Remove from saved trackers list
+    // Drop from runtime trackers map so the UI doesn't show it as active.
+    this.trackers.delete(deviceId)
+    // Remove from saved trackers list (preserves order of remaining entries).
     if (existsInSaved) {
       this.config.trackers = savedTrackers.filter(id => id !== deviceId)
     }
@@ -636,17 +636,23 @@ class HyperateAddon {
   }
   getStatus() {
     this.secrets = this.loadSecrets()
+    // "connected" is true if any per-tracker socket is currently OPEN.
+    // "reconnecting" is true if any slot is currently in a backoff.
+    const slots = Array.from(this.connections.values())
+    const connected = slots.some(s => !!s.ws && s.ws.readyState === WebSocket.OPEN)
+    const reconnecting = slots.some(s => !!s.reconnectTimeout)
+    const maxAttempts = slots.reduce((m, s) => Math.max(m, s.reconnectAttempts), 0)
     return {
       enabled: this.enabled,
-      connected: !!(this.ws && this.ws.readyState === WebSocket.OPEN),
+      connected,
       trackers: Array.from(this.trackers.keys()),
       primaryTracker: this.primaryTracker,
       lastHeartRate: this.lastHeartRate,
-      reconnectAttempts: this.reconnectAttempts,
+      reconnectAttempts: maxAttempts,
       maxReconnectAttempts: this.maxReconnectAttempts,
       hasApiKey: !!(this.secrets && this.secrets.hyperate && this.secrets.hyperate.apiKey),
       lastError: this.lastError,
-      reconnecting: this.reconnecting
+      reconnecting
     }
   }
   // --- HR History DB methods ---
@@ -792,23 +798,43 @@ class HyperateAddon {
       lastUpdate: number | null
       joinedAt: number | null
     }[] = []
-    // Get all saved trackers (both active and inactive)
-    const allTrackers = new Set([
-      ...Array.from(this.trackers.keys()),
-      ...(this.config.trackers || [])
-    ])
-    for (const deviceId of allTrackers) {
+    // Order is the source of truth: saved config order (a JSON array, so
+    // config.json order is preserved). Append any Map-only entries at the
+    // end — these are trackers that joined the WS but never made it into
+    // config (race during WS connect) and shouldn't reorder the UI.
+    //
+    // Previously this used `new Set([...map.keys(), ...config])` which
+    // deduped but produced a non-deterministic order whenever Map insertion
+    // order disagreed with config order.
+    const seen = new Set<string>()
+    const savedOrder = this.config.trackers || []
+    for (const deviceId of savedOrder) {
+      if (seen.has(deviceId)) continue
+      seen.add(deviceId)
       const trackerData = this.trackers.get(deviceId)
-      // Tracker is only active if HypeRate is enabled AND tracker exists in the active trackers map
       const isActive = this.enabled && !!trackerData
       trackerList.push({
         deviceId,
         name: this.trackerNames[deviceId] || null,
         isPrimary: deviceId === this.primaryTracker,
-        isActive: isActive,
+        isActive,
         lastHeartRate: isActive ? (trackerData!.lastHeartRate || 0) : 0,
         lastUpdate: isActive ? (trackerData!.lastUpdate || trackerData!.joinedAt) : null,
         joinedAt: isActive ? trackerData!.joinedAt : null
+      })
+    }
+    for (const deviceId of this.trackers.keys()) {
+      if (seen.has(deviceId)) continue
+      seen.add(deviceId)
+      const trackerData = this.trackers.get(deviceId)!
+      trackerList.push({
+        deviceId,
+        name: this.trackerNames[deviceId] || null,
+        isPrimary: deviceId === this.primaryTracker,
+        isActive: this.enabled,
+        lastHeartRate: this.enabled ? (trackerData.lastHeartRate || 0) : 0,
+        lastUpdate: this.enabled ? (trackerData.lastUpdate || trackerData.joinedAt) : null,
+        joinedAt: this.enabled ? trackerData.joinedAt : null
       })
     }
     return trackerList
