@@ -129,8 +129,23 @@ export function useHyperate() {
         status.value = { ...defaultStatus, ...data }
         heartRate.value = data.lastHeartRate ?? heartRate.value
         void refreshTrackers()
-      } else if (data.heartRate !== undefined) {
-        heartRate.value = data.heartRate
+      } else if (data.heartRate !== undefined && data.deviceId) {
+        // Per-tracker push: update the matching entry in-place so non-primary
+        // trackers no longer wait on the 2s polling fallback. Only update the
+        // top-level heartRate ref if the device is the current primary.
+        const idx = trackers.value.findIndex(t => t.deviceId === data.deviceId)
+        if (idx >= 0) {
+          const existing = trackers.value[idx]
+          trackers.value[idx] = {
+            ...existing,
+            lastHeartRate: data.heartRate,
+            lastUpdate: Date.now()
+          }
+        }
+        const primary = trackers.value.find(t => t.isPrimary)
+        if (primary && primary.deviceId === data.deviceId) {
+          heartRate.value = data.heartRate
+        }
       }
     })
   })
