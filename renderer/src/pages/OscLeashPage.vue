@@ -508,47 +508,47 @@ const {
   color: #3498db;
 }
 :global(.autostart-toggle-slider) {
-  background: #34495e;
-  border-color: #2c3e50;
-})
+  background: var(--surface-secondary-strong);
+  border-color: var(--surface-secondary);
+}
 
 :global(.autostart-toggle-slider:hover) {
-  border-color: #3498db;
-})
+  border-color: var(--accent-secondary);
+}
 
 :global(.autostart-toggle-option) {
-  color: #95a5a6;
-})
+  color: var(--text-tertiary);
+}
 
 :global(.autostart-toggle-option.active) {
-  background: #3498db;
-  color: white;
-})
+  background: var(--accent-secondary);
+  color: var(--text-inverse);
+}
 
 :global(.autostart-toggle-option.active.enabled) {
-  background: #27ae60;
-})
+  background: var(--color-success);
+}
 
 :global(.autostart-toggle-option.active.disabled) {
-  background: #7f8c8d;
-})
+  background: var(--text-muted);
+}
 
 :global(.oscleash-readonly-input) {
-  background-color: #2c3e50 !important;
-})
+  background-color: var(--surface-secondary) !important;
+}
 
 :global(.oscleash-readonly-input) {
-  color: #ecf0f1;
-})
+  color: var(--text-primary);
+}
 :global(.oscleash-empty-state,
 :global(.oscleash-subtext)) {
   color: #95a5a6;
-})
+}
 :global(.oscleash-leash-item,
 :global(.oscleash-readonly-input),
 :global(.oscleash-note-box)) {
   border-color: #34495e;
-})
+}
 @media (max-width: 700px) {
   .oscleash-movement-grid,
   .oscleash-run-grid,

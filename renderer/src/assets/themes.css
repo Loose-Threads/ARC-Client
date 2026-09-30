@@ -134,6 +134,12 @@
     --scrollbar-thumb: #5a6478;
     --scrollbar-thumb-hover: var(--accent);
 
+    /* --- Themed extensions (page-level overrides consume these) --- */
+    --accent-secondary: #3498db;
+    --surface-secondary: #2c3e50;
+    --surface-secondary-strong: #34495e;
+    --accent-soft-strong: rgba(93, 173, 226, 0.25);
+    --surface-wash: rgba(255, 255, 255, 0.08);
     color-scheme: dark;
 }
 
@@ -259,6 +265,12 @@
     --font-display: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
     --font-size-display: calc(34px * var(--font-scale));
 
+    /* --- Themed extensions (page-level overrides consume these) --- */
+    --accent-secondary: #5dade2;
+    --surface-secondary: #1c0e12;
+    --surface-secondary-strong: #321b22;
+    --accent-soft-strong: rgba(220, 20, 60, 0.22);
+    --surface-wash: rgba(255, 245, 243, 0.06);
     color-scheme: dark;
 }
 
@@ -509,6 +521,12 @@
     --font-display: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
     --font-size-display: calc(34px * var(--font-scale));
 
+    /* --- Themed extensions (page-level overrides consume these) --- */
+    --accent-secondary: #a855f7;
+    --surface-secondary: #170f29;
+    --surface-secondary-strong: #20153a;
+    --accent-soft-strong: rgba(168, 85, 247, 0.25);
+    --surface-wash: rgba(255, 245, 251, 0.08);
     color-scheme: dark;
 }
 
@@ -742,6 +760,12 @@
 
     --hairline: 1px;
 
+    /* --- Themed extensions (page-level overrides consume these) --- */
+    --accent-secondary: #00d4ff;
+    --surface-secondary: #161616;
+    --surface-secondary-strong: #1c1c1c;
+    --accent-soft-strong: rgba(0, 212, 255, 0.22);
+    --surface-wash: rgba(255, 176, 0, 0.10);
     color-scheme: dark;
 }
 
@@ -926,6 +950,12 @@
     --font-size-display: calc(24px * var(--font-scale));
     --line-height-base: 1.55;
 
+    /* --- Themed extensions (page-level overrides consume these) --- */
+    --accent-secondary: #3498db;
+    --surface-secondary: #2c3e50;
+    --surface-secondary-strong: #34495e;
+    --accent-soft-strong: rgba(52, 152, 219, 0.20);
+    --surface-wash: rgba(255, 255, 255, 0.05);
     color-scheme: dark;
 }
 
@@ -941,6 +971,68 @@
 :root[data-theme="original"] {
     --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.5);
     --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+/* Pre-token palette refinements — drive card / sidebar / runtime-timer
+ * to the exact literal hex from the pre-tokenization dark theme so the
+ * "Original" preset reads as a faithful, not approximate, throwback. */
+:root[data-theme="original"] .card {
+    background: #2b2b2b;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-default);
+}
+:root[data-theme="original"] .sidebar {
+    background: #1a1a1a;
+    border-right: 1px solid var(--border-default);
+}
+:root[data-theme="original"] .app-container,
+:root[data-theme="original"] .main-content {
+    background: #121212;
+}
+:root[data-theme="original"] .user-info-box {
+    background-color: #353535;
+}
+:root[data-theme="original"] .parameter-item {
+    background: var(--surface-secondary);
+    border-color: var(--surface-secondary-strong);
+}
+:root[data-theme="original"] .parameter-item:nth-child(even) {
+    background-color: var(--surface-secondary-strong);
+}
+:root[data-theme="original"] .parameter-item:hover {
+    background-color: var(--accent);
+}
+:root[data-theme="original"] .tab {
+    background: var(--surface-secondary-strong);
+}
+:root[data-theme="original"] .tab.active {
+    background: var(--accent);
+}
+:root[data-theme="original"] .tree-toggle {
+    background-color: var(--surface-secondary-strong);
+}
+:root[data-theme="original"] .tree-toggle:hover {
+    background-color: var(--accent);
+}
+:root[data-theme="original"] .tree-child {
+    background-color: var(--surface-secondary);
+}
+:root[data-theme="original"] .tree-child:hover {
+    background-color: var(--accent);
+}
+/* Pre-token: tree-child.active was #27ae60 (green for "active/grabbed"),
+   not the modern accent secondary blue. */
+:root[data-theme="original"] .tree-child.active {
+    background-color: var(--color-success);
+}
+:root[data-theme="original"] .runtime-timer {
+    background: rgba(44, 62, 80, 0.6);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--text-primary);
+}
+:root[data-theme="original"] .osc-connection-item {
+    background-color: rgba(52, 73, 94, 0.3);
+    border-color: var(--surface-secondary-strong);
 }
 
 /* Hairline section dividers — the original signature */

@@ -143,25 +143,25 @@ const {
   margin-top: 5px;
 }
 
-:global() {
-  color: #ecf0f1;
-})
+:global(.vrchatapi-stats-section) {
+  color: var(--text-primary);
+}
 
-:global() {
-  color: #95a5a6;
-})
+:global(.vrchatapi-user-id) {
+  color: var(--text-tertiary);
+}
 
-:global() {
-  background: #353535 !important;
-  border-color: #454545 !important;
-  color: #ecf0f1 !important;
-})
+:global(.vrchatapi-stat-card) {
+  background: var(--surface-2) !important;
+  border-color: var(--border-default) !important;
+  color: var(--text-primary) !important;
+}
 
-:global() {
-  color: #5dade2;
-})
+:global(.vrchatapi-stat-value) {
+  color: var(--accent);
+}
 
-:global() {
-  color: #bdc3c7;
-})
+:global(.vrchatapi-stat-label) {
+  color: var(--text-secondary);
+}
 </style>
