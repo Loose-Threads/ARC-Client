@@ -287,20 +287,20 @@ const {
 .os-log-msg { font-size: 13px; color: #333; line-height: 1.4; }
 .os-log-error { font-size: 12px; color: #e74c3c; margin-top: 4px; }
 .os-log-time { font-size: 11px; color: #95a5a6; margin-top: 4px; }
-:global() { background: linear-gradient(135deg, #1a252f 0%, #1e7e34 100%); })
-:global() { background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%); })
-:global() { border-bottom-color: #444; })
-:global() { color: #7f8c8d; })
-:global() { color: #ecf0f1; })
-:global() { color: #5dade2; border-bottom-color: #5dade2; })
-:global() { background: #2a2a2a; border-color: #444; })
-:global() { border-color: #666; })
-:global() { border-color: #5dade2; background: #1a2a3a; })
-:global() { color: #ecf0f1; })
-:global() { color: #ecf0f1; })
-:global() { background: rgba(231, 76, 60, 0.15); color: #e74c3c; })
-:global() { background: #444; color: #ecf0f1; })
-:global() { background: #2a2a2a; border-color: #444; })
-:global() { color: #ddd; })
+:global(.os-banner-connected) { background: linear-gradient(135deg, #1a252f 0%, #1e7e34 100%); }
+:global(.os-banner-disconnected) { background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%); }
+:global(.os-tabs) { border-bottom-color: var(--border-default); }
+:global(.os-tab) { color: var(--text-muted); }
+:global(.os-tab:hover) { color: var(--text-primary); }
+:global(.os-tab.active) { color: var(--accent); border-bottom-color: var(--accent); }
+:global(.os-shocker-card) { background: var(--surface-2); border-color: var(--border-default); }
+:global(.os-shocker-card:hover) { border-color: var(--border-strong); }
+:global(.os-shocker-selected) { border-color: var(--accent); background: var(--surface-secondary); }
+:global(.os-shocker-name) { color: var(--text-primary); }
+:global(.os-section-header h3) { color: var(--text-primary); }
+:global(.os-error-banner) { background: var(--color-danger-soft); color: var(--color-danger); }
+:global(.os-hint code) { background: var(--border-default); color: var(--text-primary); }
+:global(.os-log-entry) { background: var(--surface-2); border-color: var(--border-default); }
+:global(.os-log-msg) { color: var(--text-secondary); }
 </style>
 
