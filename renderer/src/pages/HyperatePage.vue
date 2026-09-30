@@ -532,72 +532,72 @@ const {
 }
 
 :global(.hyperate-primary-badge) {
-  background: #2ecc71;
-  color: #fff;
-})
+  background: var(--color-success);
+  color: var(--text-inverse);
+}
 
 :global(.hyperate-modal-title) {
-  color: #ecf0f1;
-})
+  color: var(--text-primary);
+}
 
 :global(.hyperate-modal-help) {
-  color: #95a5a6;
-})
+  color: var(--text-tertiary);
+}
 
 :global(.hyperate-empty-state) {
-  color: #bdc3c7;
-})
+  color: var(--text-secondary);
+}
 
 :global(.hyperate-status-inactive) {
-  color: #95a5a6;
-})
+  color: var(--text-tertiary);
+}
 
 :global(.hyperate-readonly-input) {
-  background-color: #1e2329;
-  color: #7f8c8d;
-  border-color: #34495e;
-})
+  background-color: var(--surface-2);
+  color: var(--text-muted);
+  border-color: var(--surface-secondary-strong);
+}
 
 :global(pre) {
-  background: #2c3e50 !important;
-  color: #ecf0f1 !important;
-})
+  background: var(--surface-secondary) !important;
+  color: var(--text-primary) !important;
+}
 :global(.hr-range-btn) {
-  border-color: #454545;
-  background: #2c3e50;
-  color: #95a5a6;
-})
+  border-color: var(--border-default);
+  background: var(--surface-secondary);
+  color: var(--text-tertiary);
+}
 :global(.hr-range-btn:hover) {
-  color: #ecf0f1;
-  background: #34495e;
-})
+  color: var(--text-primary);
+  background: var(--surface-secondary-strong);
+}
 :global(.hr-range-btn.active) {
-  background: #3498db;
-  color: #fff;
-  border-color: #3498db;
-})
+  background: var(--accent-secondary);
+  color: var(--text-inverse);
+  border-color: var(--accent-secondary);
+}
 :global(.hr-retention-select) {
-  border-color: #454545;
-  background: #2c3e50;
-  color: #ecf0f1;
-})
+  border-color: var(--border-default);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
 :global(.hr-stat-val) {
-  color: #ecf0f1;
-})
+  color: var(--text-primary);
+}
 :global(.hr-datetime-input) {
-  border-color: #454545;
-  background: #2c3e50;
-  color: #ecf0f1;
-})
+  border-color: var(--border-default);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
 :global(.hr-custom-arrow) {
-  color: #95a5a6;
-})
+  color: var(--text-tertiary);
+}
 :global(.hr-live-btn-idle) {
-  background: #2c3e50;
-  color: #95a5a6;
-  border-color: #454545;
-})
+  background: var(--surface-secondary);
+  color: var(--text-tertiary);
+  border-color: var(--border-default);
+}
 :global(.hr-live-dot) {
-  background: #555;
-})
+  background: var(--border-default);
+}
 </style>
