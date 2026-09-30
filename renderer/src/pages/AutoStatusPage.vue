@@ -712,24 +712,24 @@ const {
 }
 
 :global(.autostatus-dropdown-trigger) {
-  background: #1e1e1e;
-  border-color: #454545;
-  color: #ecf0f1;
-})
+  background: var(--surface-1);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
 
 :global(.autostatus-dropdown-menu) {
-  background: #2b2b2b;
-  border-color: #454545;
+  background: var(--surface-2);
+  border-color: var(--border-default);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-})
+}
 
 :global(.autostatus-dropdown-item) {
-  color: #ecf0f1;
-})
+  color: var(--text-primary);
+}
 
 :global(.autostatus-dropdown-item:hover) {
-  background: #3a3a4a;
-})
+  background: var(--surface-3);
+}
 
 .autostatus-schedule-empty {
   text-align: center;
@@ -1002,12 +1002,12 @@ const {
 :global(.autostatus-banner) {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-})
+}
 
 :global(.autostatus-section-header h3,
 :global(.autostatus-preset-name-display)) {
   color: #ecf0f1;
-})
+}
 
 :global(.autostatus-section-hint,
 :global(.autostatus-field label),
@@ -1016,21 +1016,21 @@ const {
 :global(.autostatus-schedule-fallback label),
 :global(.autostatus-presets-empty)) {
   color: #95a5a6;
-})
+}
 
 :global(.autostatus-schedule-time) {
-  color: #ecf0f1;
-})
+  color: var(--text-primary);
+}
 
 :global(.autostatus-schedule-preset) {
-  color: #ecf0f1;
-})
+  color: var(--text-primary);
+}
 
 :global(.autostatus-schedule-empty) {
-  background: #1e1e1e;
-  border-color: #454545;
-  color: #7f8c8d;
-})
+  background: var(--surface-1);
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
 
 :global(.autostatus-preset-card,
 :global(.autostatus-info-box),
@@ -1039,21 +1039,21 @@ const {
   background: #2b2b2b;
   border-color: #454545;
   color: #ecf0f1;
-})
+}
 
 :global(.autostatus-schedule-row) {
-  background: #2b2b2b;
-  border-color: #454545;
+  background: var(--surface-2);
+  border-color: var(--border-default);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-})
+}
 
 :global(.autostatus-preset-card:hover) {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-})
+}
 
 :global(.autostatus-preset-header) {
-  border-bottom-color: #454545;
-})
+  border-bottom-color: var(--border-default);
+}
 
 :global(.autostatus-field input,
 :global(.autostatus-field select),
@@ -1062,29 +1062,29 @@ const {
   background: #1e1e1e;
   border-color: #454545;
   color: #ecf0f1;
-})
+}
 
 :global(.autostatus-presets-empty,
 :global(.autostatus-preset-add-card)) {
   border-color: #555;
   color: #999;
-})
+}
 
 :global(.autostatus-preset-add-card:hover) {
-  border-color: #3498db;
-  color: #3498db;
-  background: rgba(52, 152, 219, 0.1);
-})
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+  background: var(--accent-soft-strong);
+}
 
 :global(.autostatus-icon-btn) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #bdc3c7;
-})
+  background: var(--surface-wash);
+  color: var(--text-secondary);
+}
 
 :global(.autostatus-location-status) {
-  background: #1e1e1e;
-  border: 1px solid #454545;
+  background: var(--surface-1);
+  border: var(--hairline) solid var(--border-default);
   border-radius: 8px;
   padding: 10px 14px;
-})
+}
 </style>

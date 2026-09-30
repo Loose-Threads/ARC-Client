@@ -486,6 +486,6 @@ watch(() => [props.data, props.isLive, props.minBpm, props.maxBpm, props.avgBpm]
   50% { opacity: 0.5; transform: scale(0.7); }
 }
 :global(.hr-chart-container) {
-  background: #1a1a2e;
-})
+  background: var(--app-bg-solid);
+}
 </style>
