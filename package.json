@@ -1,6 +1,6 @@
 {
   "name": "arc-osc-client",
-  "version": "0.94.0",
+  "version": "0.94.1",
   "author": "ComfyChloe",
   "description": "Standalone OSC Client for ARC-OSC",
   "main": "./out/main/index.js",
@@ -27,6 +27,7 @@
     "prebuild": "node scripts/prepare-whisper-libs.mjs || node -e \"console.log('[prepare-whisper-libs] no-op: addon resolves via node_modules + asarUnpack')\"",
     "build": "electron-vite build && electron-builder --dir",
     "smoke:whisper": "node scripts/smoke-whisper-worker.mjs",
+    "test:oscquery": "node --test tests/test-oscquery.cjs",
     "pack": "electron-builder --dir",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",

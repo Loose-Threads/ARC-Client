@@ -98,7 +98,7 @@ const {
       <div class="osc-settings-group">
         <h4 class="osc-settings-heading">OSC-Query Binding</h4>
         <div class="form-group">
-          <label for="oscquery-bind-address-settings">Bind Address <small class="osc-settings-hint">(0.0.0.0 = all interfaces)</small></label>
+          <label for="oscquery-bind-address-settings">Bind Address <small class="osc-settings-hint">(0.0.0.0 = all interfaces, local OSC delivery; for remote VRChat, enter this PC's LAN IP)</small></label>
           <input id="oscquery-bind-address-settings" v-model="oscQueryBindAddress" type="text" />
         </div>
       </div>
