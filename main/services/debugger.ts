@@ -314,22 +314,23 @@ class Debugger {
   }
   
   /**
-   * Formats a crash message with full context for error dialogs
-   * @param {string} errorType - Type of error (e.g., 'Uncaught Exception', 'Renderer Crash')
-   * @param {string} errorMessage - Brief error message
-   * @returns {string} Formatted message for display
+   * Reads the tail of the current log file for crash-report capture.
+   * Read immediately before teardown so the report carries context.
+   * @param {number} count - Maximum number of trailing lines to return
+   * @returns {string[]} Trailing log lines, oldest first; empty on failure
    */
-  formatCrashDialogMessage(errorType: string, errorMessage: string): string {
-    return `${errorType}
-
-${errorMessage}
-
-A crash log has been saved. Please submit this log to help us fix the issue:
-• Join the ARC Discord and post in #bug-reports
-• If you've contacted ComfyChloe via DMs about this, please mention that
-
-Log location:
-${this.logFile}`;
+  getLastNLines(count: number): string[] {
+    try {
+      const content = fs.readFileSync(this.logFile, 'utf8')
+      const lines = content.split('\n')
+      while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+        lines.pop()
+      }
+      return lines.slice(-count)
+    } catch (err) {
+      console.error('Failed to read log tail:', err)
+      return []
+    }
   }
   
   /**

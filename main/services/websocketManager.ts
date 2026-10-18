@@ -907,7 +907,8 @@ class WebSocketManager {
                 'submit-feedback': 'feedback-response',
                 'get-feedback-list': 'feedback-list-response',
                 'vote-feedback': 'vote-feedback-response',
-                'get-user-feedback-stats': 'user-feedback-stats-response'
+                'get-user-feedback-stats': 'user-feedback-stats-response',
+                'submit-crash-report': 'crash-report-response'
             }
             if (responseEvents[event]) {
                 const responseHandler = (response: { success?: boolean; error?: string }) => {

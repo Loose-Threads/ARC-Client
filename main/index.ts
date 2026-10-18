@@ -1,9 +1,12 @@
 import './bootstrap' // MUST be first — sets userData path before service constructors
-import { app, BrowserWindow, ipcMain, dialog, session, shell, clipboard, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell, clipboard, Menu } from 'electron'
 import path from 'node:path'
 import { encryptData, decryptData } from './services/encryption'
 import osc from 'osc'
 import debug from './services/debugger'
+import { buildCrashReport, writeCrashReport, readCrashReport, clearCrashReport } from './services/crashReportStore'
+import type { CrashReport } from './services/crashReportStore'
+import { canRestart, recordRestart, RESTART_GUARD_LIMITS } from './services/restartGuard'
 import OscService from './services/oscService'
 import { OSCQueryService } from './services/oscQueryService'
 import HyperateAddon from './containers/hyperate/hyperate'
@@ -40,7 +43,10 @@ let openShockContainer: any
 let arcLinkContainer: any
 // Custom WebSocket URLs are now persisted across restarts
 let isShuttingDown = false
-let hasShownCriticalError = false
+// Counts consecutive renderer crashes; reset on did-finish-load so only a
+// crash that a reload cannot fix escalates to a full application relaunch.
+let rendererCrashCount = 0
+const CRASH_LOG_TAIL_LINES = 200
 initDb()
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 
@@ -257,55 +263,52 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+  mainWindow.webContents.once('did-finish-load', () => {
+    // A renderer that finishes loading has recovered — reset the escalation
+    // counter so a later, unrelated crash gets the cheap reload path again.
+    rendererCrashCount = 0
+  })
   mainWindow.webContents.on('render-process-gone', (event, details) => {
-    if (hasShownCriticalError) {
+    if (details.reason === 'clean-exit') {
       return
     }
-    hasShownCriticalError = true
-    // Log crash details before cleanup
     debug.logRendererCrash({
       reason: details.reason,
       exitCode: details.exitCode,
       timestamp: new Date().toISOString()
     })
     debug.logCriticalShutdown(`Renderer process gone: ${details.reason}`, 'webContents.render-process-gone')
-    // Only force quit on actual crashes, not clean exits
-    if (details.reason !== 'clean-exit') {
-      cleanup('renderer-process-gone')
-      const errorMessage = debug.formatCrashDialogMessage(
-        'Renderer Process Crashed',
-        `Reason: ${details.reason}\nExit Code: ${details.exitCode}`
-      )
-      const shouldRestart = showCrashDialog('Application Error', errorMessage)
-      if (shouldRestart) {
-        relaunchApp()
-      } else {
-        process.exit(1)
-      }
-    }
+    // A crashed renderer leaves main-process services (OSC, addons, WebSocket)
+    // fully intact, so the first crash only needs the window reloaded. A second
+    // consecutive crash means the reload did not help — escalate to a full relaunch.
+    const action = rendererCrashCount === 0 ? 'reload' : 'relaunch'
+    rendererCrashCount += 1
+    handleCrash(
+      buildCrashReport({
+        crashType: 'renderer-gone',
+        reason: details.reason,
+        exitCode: details.exitCode,
+        message: `The renderer process exited unexpectedly.\nReason: ${details.reason}\nExit code: ${details.exitCode}`,
+        logTail: debug.getLastNLines(CRASH_LOG_TAIL_LINES)
+      }),
+      action
+    )
   })
   mainWindow.on('unresponsive', () => {
-    if (hasShownCriticalError) {
-      return
-    }
-    hasShownCriticalError = true
-    // Log unresponsive state before cleanup
     debug.logRendererUnresponsive({
       timestamp: new Date().toISOString(),
       uptime: Math.round((Date.now() - debug.startTime) / 1000)
     })
     debug.logCriticalShutdown('Renderer process unresponsive', 'window.unresponsive')
-    cleanup('renderer-unresponsive')
-    const errorMessage = debug.formatCrashDialogMessage(
-      'Application Unresponsive',
-      'The application stopped responding and could not recover.'
+    handleCrash(
+      buildCrashReport({
+        crashType: 'renderer-unresponsive',
+        message: 'The application stopped responding and could not recover.',
+        upstreamSeconds: Math.round((Date.now() - debug.startTime) / 1000),
+        logTail: debug.getLastNLines(CRASH_LOG_TAIL_LINES)
+      }),
+      'relaunch'
     )
-    const shouldRestart = showCrashDialog('Application Unresponsive', errorMessage)
-    if (shouldRestart) {
-      relaunchApp()
-    } else {
-      process.exit(1)
-    }
   })
 }
 function initWebSocket() {
@@ -1139,6 +1142,32 @@ ipcMain.handle('send-feedback', async (_event, feedbackData: any) => {
     return response
   } catch (error: any) {
     debug.error(`Failed to submit feedback: ${error.message}`)
+    throw error
+  }
+})
+// Crash Report IPC Handlers
+ipcMain.handle('crash-report:get', async () => {
+  return readCrashReport()
+})
+ipcMain.handle('crash-report:clear', async () => {
+  clearCrashReport()
+  return { success: true }
+})
+ipcMain.handle('crash-report:submit', async () => {
+  try {
+    const report = readCrashReport()
+    if (!report) {
+      throw new Error('No crash report is available to submit')
+    }
+    if (!wsManager || !wsManager.isConnected) {
+      throw new Error('Not connected to ARC WebSocket server')
+    }
+    debug.info(`Submitting crash report: ${report.crashType}`)
+    const response = await wsManager.sendMessage('submit-crash-report', report)
+    debug.info('Crash report submitted successfully')
+    return response
+  } catch (error: any) {
+    debug.error(`Failed to submit crash report: ${error.message}`)
     throw error
   }
 })
@@ -2651,23 +2680,40 @@ function setupMemoryManagement() {
     }
   }, 20000)
 }
-function showCrashDialog(title: string, message: string): boolean {
+function handleCrash(report: CrashReport, action: 'reload' | 'relaunch') {
   try {
-    const result = dialog.showMessageBoxSync({
-      type: 'error',
-      title: title,
-      message: title,
-      detail: message,
-      buttons: ['Restart Application', 'Close'],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true
-    })
-    return result === 0
-  } catch {
-    dialog.showErrorBox(title, message)
-    return true
+    // Persist before any teardown so the reloaded window can render the report.
+    writeCrashReport(report)
+  } catch (reportError: any) {
+    console.error('Failed to persist crash report:', reportError)
   }
+  if (action === 'reload' && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      debug.info('Reloading renderer after crash...')
+      mainWindow.webContents.reload()
+      return
+    } catch (reloadError: any) {
+      debug.warn(`Renderer reload failed, falling back to relaunch: ${reloadError.message}`)
+    }
+  }
+  // Restart loop guard — stop instead of relaunching forever.
+  if (!canRestart()) {
+    try {
+      debug.error(`Restart limit reached (${RESTART_GUARD_LIMITS.MAX_RESTARTS} in ${RESTART_GUARD_LIMITS.WINDOW_MS}ms). Exiting.`)
+    } catch {
+      console.error('Restart limit reached; exiting.')
+    }
+    process.exit(1)
+    return
+  }
+  try {
+    const attempt = recordRestart()
+    debug.warn(`Restarting application (attempt ${attempt}/${RESTART_GUARD_LIMITS.MAX_RESTARTS})...`)
+  } catch (guardError: any) {
+    debug.warn(`Restart guard error: ${guardError.message}`)
+  }
+  cleanup(`crash:${report.crashType}`)
+  relaunchApp()
 }
 function relaunchApp() {
   try {
@@ -2890,11 +2936,6 @@ app.on('before-quit', () => {
   cleanup('before-quit')
 })
 process.on('uncaughtException', (error) => {
-  if (hasShownCriticalError) {
-    process.exit(1)
-    return
-  }
-  hasShownCriticalError = true
   try {
     debug.logUncaughtException(error, 'main')
     debug.logCriticalShutdown('Uncaught exception', 'process.uncaughtException')
@@ -2902,32 +2943,18 @@ process.on('uncaughtException', (error) => {
     console.error('Failed to log error via debug:', _debugError)
     console.error('Original error:', error)
   }
-  try {
-    cleanup('uncaught-exception')
-  } catch (cleanupError: any) {
-    try {
-      debug.error(`Error during cleanup: ${cleanupError.message}`)
-    } catch {
-      console.error('Cleanup error:', cleanupError)
-    }
-  }
-  const errorMessage = debug.formatCrashDialogMessage(
-    'Uncaught Exception',
-    error.message || String(error)
+  handleCrash(
+    buildCrashReport({
+      crashType: 'uncaught-exception',
+      message: error.message || String(error),
+      stack: error.stack || null,
+      upstreamSeconds: Math.round((Date.now() - debug.startTime) / 1000),
+      logTail: debug.getLastNLines(CRASH_LOG_TAIL_LINES)
+    }),
+    'relaunch'
   )
-  const shouldRestart = showCrashDialog('Critical Error', errorMessage)
-  if (shouldRestart) {
-    relaunchApp()
-  } else {
-    process.exit(1)
-  }
 })
 process.on('unhandledRejection', (reason: any, _promise) => {
-  if (hasShownCriticalError) {
-    process.exit(1)
-    return
-  }
-  hasShownCriticalError = true
   try {
     debug.logUnhandledRejection(reason, _promise, 'main')
     debug.logCriticalShutdown('Unhandled promise rejection', 'process.unhandledRejection')
@@ -2935,24 +2962,15 @@ process.on('unhandledRejection', (reason: any, _promise) => {
     console.error('Failed to log rejection via debug:', _debugError)
     console.error('Original rejection:', reason)
   }
-  try {
-    cleanup('unhandled-rejection')
-  } catch (cleanupError: any) {
-    try {
-      debug.error(`Error during cleanup: ${cleanupError.message}`)
-    } catch {
-      console.error('Cleanup error:', cleanupError)
-    }
-  }
   const reasonMessage = reason && reason.message ? reason.message : String(reason)
-  const errorMessage = debug.formatCrashDialogMessage(
-    'Unhandled Promise Rejection',
-    reasonMessage
+  handleCrash(
+    buildCrashReport({
+      crashType: 'unhandled-rejection',
+      message: reasonMessage,
+      stack: reason && reason.stack ? reason.stack : null,
+      upstreamSeconds: Math.round((Date.now() - debug.startTime) / 1000),
+      logTail: debug.getLastNLines(CRASH_LOG_TAIL_LINES)
+    }),
+    'relaunch'
   )
-  const shouldRestart = showCrashDialog('Critical Error', errorMessage)
-  if (shouldRestart) {
-    relaunchApp()
-  } else {
-    process.exit(1)
-  }
 })
