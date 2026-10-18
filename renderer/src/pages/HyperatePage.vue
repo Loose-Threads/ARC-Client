@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Logic lives in the sibling HyperatePage.ts factory — keep this block thin.
 import { createHyperatePageState } from './HyperatePage'
+import HeartRateChart from '../components/HeartRateChart.vue'
 const {
   status,
   trackers,
