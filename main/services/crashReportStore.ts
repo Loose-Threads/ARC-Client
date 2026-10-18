@@ -37,10 +37,24 @@ export interface CrashReport {
   logTail: string[]
 }
 
+function resolveElectron(): any | null {
+  try {
+    return require('electron')
+  } catch {
+    return null
+  }
+}
+
+function resolveReportDir(): string {
+  const override = process.env.ARC_CRASH_DATA_DIR
+  if (override) return override
+  const electron = resolveElectron()
+  const base = electron?.app?.getPath ? electron.app.getPath('userData') : path.join(__dirname, '..')
+  return base
+}
+
 function reportPath(): string {
-  const electron = require('electron')
-  const base = electron.app ? electron.app.getPath('userData') : path.join(__dirname, '..')
-  return path.join(base, REPORT_FILENAME)
+  return path.join(resolveReportDir(), REPORT_FILENAME)
 }
 
 export function buildCrashReport(input: {
@@ -52,8 +66,8 @@ export function buildCrashReport(input: {
   upstreamSeconds?: number
   logTail?: string[]
 }): CrashReport {
-  const electron = require('electron')
-  const appVersion = electron.app?.getVersion?.() ?? 'unknown'
+  const electron = resolveElectron()
+  const appVersion = electron?.app?.getVersion?.() ?? 'unknown'
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     crashType: input.crashType,
