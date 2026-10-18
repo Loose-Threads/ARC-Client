@@ -309,6 +309,10 @@ const api = {
   // Shell and clipboard API for VRC Timeline
   openExternal: (url: string) => ipcRenderer.invoke('shell-open-external', url),
   clipboardWriteText: (text: string) => ipcRenderer.invoke('clipboard-write-text', text),
+  // Crash report — read by the in-app modal after an automatic restart
+  crashReportGet: () => ipcRenderer.invoke('crash-report:get'),
+  crashReportClear: () => ipcRenderer.invoke('crash-report:clear'),
+  crashReportSubmit: () => ipcRenderer.invoke('crash-report:submit'),
   // Active page telemetry
   setActivePage: (page: string) => ipcRenderer.send('set-active-page', page)
 }

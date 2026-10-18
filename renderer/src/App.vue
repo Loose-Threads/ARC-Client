@@ -6,6 +6,7 @@ import { useServerConnection, type PanelInfo } from './composables/useServerConn
 import { useSettings } from './composables/useSettings'
 import { useOscLogs } from './composables/useOscLogs'
 import { useVRChatAPI } from './composables/useVRChatAPI'
+import CrashReportModal from './components/CrashReportModal.vue'
 
 const route = useRoute()
 const extrasOpen = ref(false)
@@ -367,6 +368,9 @@ function linksBreakdown(panel: PanelInfo): string {
   <div class="snow-overlay" :class="{ hidden: !snowEnabled }">
     <div v-for="index in 50" :key="index" class="snow"></div>
   </div>
+
+  <!-- Crash report modal — shown after an automatic restart -->
+  <CrashReportModal />
 </template>
 
 <style scoped>
