@@ -28,6 +28,7 @@
     "build": "electron-vite build && electron-builder --dir",
     "smoke:whisper": "node scripts/smoke-whisper-worker.mjs",
     "test:oscquery": "node --test tests/test-oscquery.cjs",
+    "test:crashreport": "node --test tests/test-crash-report.cjs",
     "pack": "electron-builder --dir",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",

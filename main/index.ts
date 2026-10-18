@@ -168,7 +168,9 @@ function createWindow() {
         label: 'Open Link in Browser',
         click: () => { shell.openExternal(params.linkURL) }
       })
-      template.push({ role: 'copyLink' })
+      // No 'copyLink' role here: it is not in Electron's MenuRole union for
+      // this version (caused a TS2322 build break) and the context menu
+      // already offers an explicit copy role above when text is selected.
       template.push({ type: 'separator' })
     }
 

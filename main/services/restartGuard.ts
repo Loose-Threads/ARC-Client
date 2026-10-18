@@ -18,10 +18,23 @@ interface RestartState {
   restarts: number[]
 }
 
+function resolveStateDir(): string {
+  const override = process.env.ARC_CRASH_DATA_DIR
+  if (override) return override
+  try {
+    // Electron may be unavailable (tests, or an early crash before app ready).
+    const electron = require('electron')
+    if (electron?.app?.getPath) {
+      return electron.app.getPath('userData')
+    }
+  } catch {
+    // fall through to the directory-relative default
+  }
+  return path.join(__dirname, '..')
+}
+
 function statePath(): string {
-  const electron = require('electron')
-  const base = electron.app ? electron.app.getPath('userData') : path.join(__dirname, '..')
-  return path.join(base, STATE_FILENAME)
+  return path.join(resolveStateDir(), STATE_FILENAME)
 }
 
 function readState(): RestartState {
