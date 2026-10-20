@@ -1,10 +1,10 @@
 import { io, Socket } from 'socket.io-client'
+import { ClientStateChannel } from './clientStateChannel'
 
 interface ConnectionConfig {
     serverUrl: string
     autoReconnect: boolean
     reconnectDelay: number
-    maxReconnectAttempts: number
 }
 
 interface Credentials {
@@ -20,6 +20,17 @@ interface ConnectResult {
 
 type EventHandler = (data: unknown) => void
 
+// Pending request/response correlation entry. Each request sends a UUID linkRequestId;
+// the server echoes the same id in its response; the manager dispatches by id so that
+// a Socket.IO reconnect (which replaces the underlying `socket`) cannot orphan an
+// in-flight request.
+interface PendingResponse {
+    resolve: (value: unknown) => void
+    reject: (reason: Error) => void
+    timeoutHandle: ReturnType<typeof setTimeout>
+    eventName: string
+}
+
 class WebSocketManager {
     socket: Socket | null
     isConnected: boolean
@@ -28,6 +39,35 @@ class WebSocketManager {
     connectionConfig: ConnectionConfig
     reconnectAttempts: number
     eventHandlers: Map<string, Set<EventHandler>>
+    // Latency tracking via Socket.IO engine packet events. We
+        // Wall-clock of the most recent Socket.IO connect. Reset on each
+    // (re)connect.
+    private connectedAt: number = 0
+    // Telemetry gate. When false, `clientState` emissions are suppressed
+    // (snapshot buffered, sent on re-enable). Controlled locally via
+    // setTelemetryEnabled() (settings persistence + IPC) and by the
+    // server's `client:command:telemetry` push. Defaults to true so
+    // existing installs keep emitting.
+    telemetryEnabled: boolean = true
+    // Active page reported by the renderer for clientState emissions.
+    activePage: string = ''
+    // Accessor for the set of enabled module names. Injected by
+    // main/index.ts after constructing wsManager to avoid circular
+    // imports (websocketManager must not import container modules).
+    private moduleAccessors: { getEnabledModules: () => string[] } | null = null
+    // ClientState telemetry channel — owns payload building, the
+    // 2s debounce, the offline buffer, and the heartbeat. All
+    // clientState state lives here instead of inline on this class.
+    private clientStateChannel: ClientStateChannel
+    // Session id for clientState. Set on first connect; persists
+    // across reconnects as the same credential login = same session.
+    private sessionId: string = ''
+    // Pending request-id → pending dispatcher. Entries are added on send* and removed
+    // when the matching response arrives or the timeout fires. Survives Socket.IO
+    // internal reconnects because dispatch is handled by a long-lived `socket.on()`
+    // registered in setupEventHandlers() — it just re-binds on each reconnect.
+    private pendingResponses: Map<string, PendingResponse> = new Map()
+    private nextRequestId: number = 0
 
     constructor() {
         this.socket = null
@@ -35,19 +75,247 @@ class WebSocketManager {
         this.isAuthenticated = false
         this.currentUser = null
         this.connectionConfig = {
-            serverUrl: 'wss://avatar.comfychloe.uk:48255',
+            serverUrl: 'wss://arcosc.app:48255',
             autoReconnect: true,
-            reconnectDelay: 3000,
-            maxReconnectAttempts: 5
+            reconnectDelay: 5000,
         }
         this.reconnectAttempts = 0
         this.eventHandlers = new Map()
+        this.clientStateChannel = new ClientStateChannel({
+            isEnabled: () => this.telemetryEnabled,
+            isConnected: () => this.isConnected,
+            getSocket: () => this.socket,
+            buildPayload: () => this.buildClientStatePayload(),
+        })
+        // Server → client command handlers. The envelope dispatcher in
+        // setupEventHandlers() re-emits each client:command on THIS
+        // manager's event bus (not the socket), so these must be
+        // registered here — once, in the constructor. Registering them
+        // on the socket (as previously done) was dead code: the socket
+        // never receives events named 'client:command:<name>'.
+        this.on('client:command:notice', (env: unknown) => this.handleNoticeCommand(env))
+        this.on('client:command:request-state', (env: unknown) => this.handleRequestStateCommand(env))
+        this.on('client:command:check-modules', (env: unknown) => this.handleCheckModulesCommand(env))
+        this.on('client:command:config-sync', (env: unknown) => this.handleConfigSyncCommand(env))
+        this.on('client:command:telemetry', (env: unknown) => this.handleTelemetryCommand(env))
+    }
+
+    /**
+     * Build the current clientState snapshot payload. Single source
+     * of truth for the wire shape — the channel uses this for live
+     * emits, buffered snapshots, and fresh (request-state) replies.
+     */
+    private buildClientStatePayload(): { v: 1; ts: number; activePage: string; modules: string[]; sessionId: string; telemetryEnabled: boolean } {
+        return {
+            v: 1,
+            ts: Date.now(),
+            activePage: this.activePage,
+            modules: this.collectModuleStates(),
+            sessionId: this.sessionId,
+            telemetryEnabled: this.telemetryEnabled,
+        }
+    }
+
+    /**
+     * Inject the module-accessor object after construction from
+     * main/index.ts. This avoids circular imports between
+     * websocketManager and container modules.
+     */
+    setModuleAccessors(accessors: { getEnabledModules: () => string[] }): void {
+        this.moduleAccessors = accessors
+    }
+
+    /**
+     * Collect enabled module names for clientState emission.
+     * Returns only currently-enabled modules (sparse encoding:
+     * absent/disabled modules are omitted from the array).
+     */
+    collectModuleStates(): string[] {
+        if (!this.moduleAccessors) return []
+        return this.moduleAccessors.getEnabledModules()
+    }
+
+    /**
+     * Emit a fresh clientState snapshot immediately, bypassing the
+     * 2-second debounce. Used to service server-side request-state
+     * commands. Optionally attaches a requestId field so the server
+     * can correlate the reply.
+     */
+    emitFreshClientState(requestId?: string): void {
+        this.clientStateChannel.emitFresh(requestId)
+    }
+
+    /**
+     * Store the active page and trigger a clientState emission.
+     * Called by the set-active-page IPC handler in main/index.ts.
+     */
+    setActivePage(page: string): void {
+        this.activePage = page
+        this.clientStateChannel.emit('page-change')
+    }
+
+    /**
+     * Notify that a module was started or stopped. Called by
+     * main/index.ts after module start/stop handlers.
+     */
+    notifyModuleToggled(): void {
+        this.clientStateChannel.emit('module-toggle')
+    }
+    // ── Server command handlers (native methods) ─────────────────
+    // Each server→client command from the client:command envelope
+    // family is a first-class method here. The dispatcher in
+    // setupEventHandlers routes client:command:<name> to these.
+    // Server wants a fresh clientState snapshot — reply immediately
+    // with the requestId attached for correlation.
+    private handleRequestStateCommand(env: unknown): void {
+        try {
+            const requestId = (env as { requestId?: string } | null)?.requestId
+            this.clientStateChannel.emitFresh(requestId)
+        } catch { /* ignore */ }
+    }
+    // Server wants a toast/banner shown to the user. Validates the
+    // payload shape, then re-emits locally as 'notice' (main/index.ts
+    // forwards it to the renderer over the notice-banner IPC channel).
+    private handleNoticeCommand(env: unknown): void {
+        try {
+            const p = (env as { payload?: unknown } | null)?.payload as {
+                id?: unknown
+                level?: unknown
+                title?: unknown
+                body?: unknown
+                dismissible?: unknown
+                ttlMs?: unknown
+            } | undefined
+            if (!p || typeof p.id !== 'string' || typeof p.title !== 'string' || typeof p.body !== 'string') return
+            const level = p.level
+            if (level !== 'info' && level !== 'warn' && level !== 'error') return
+            this.emit('notice', {
+                id: p.id,
+                level: level as 'info' | 'warn' | 'error',
+                title: p.title as string,
+                body: p.body as string,
+                dismissible: p.dismissible === true,
+                ttlMs: typeof p.ttlMs === 'number' && p.ttlMs > 0 ? p.ttlMs : 8000,
+            })
+        } catch { /* ignore */ }
+    }
+    // Server asks which of the named modules are currently enabled.
+    // Replies with the standard clientState payload plus a
+    // moduleAvailability map and the requestId (the server's parser
+    // ignores extra fields).
+    private handleCheckModulesCommand(env: unknown): void {
+        try {
+            const p = (env as { payload?: unknown } | null)?.payload as { modules?: unknown; requestId?: unknown } | undefined
+            if (!Array.isArray(p?.modules)) return
+            const enabledModules = new Set(this.collectModuleStates())
+            const moduleAvailability: Record<string, boolean> = {}
+            for (const m of p.modules as unknown[]) {
+                if (typeof m === 'string') moduleAvailability[m] = enabledModules.has(m)
+            }
+            const requestId = (p?.requestId as string | undefined) ?? (env as { requestId?: string } | null)?.requestId
+            const payload: Record<string, unknown> = this.buildClientStatePayload()
+            payload.requestId = requestId
+            payload.moduleAvailability = moduleAvailability
+            if (this.isConnected && this.socket) this.socket.emit('clientState', payload)
+        } catch { /* ignore */ }
+    }
+    // Server pushes a config delta: parameter blocklist patterns
+    // and/or default app settings. Blocklist reuses the existing
+    // 'parameter-blocklist' local event path; settings merge happens
+    // in main/index.ts (only fills undefined keys).
+    private handleConfigSyncCommand(env: unknown): void {
+        try {
+            const p = (env as { payload?: unknown } | null)?.payload as {
+                parameterBlocklist?: unknown
+                defaultAppSettings?: unknown
+            } | undefined
+            if (!p) return
+            if (Array.isArray(p.parameterBlocklist)) {
+                this.emit('parameter-blocklist', { patterns: p.parameterBlocklist })
+            }
+            if (p.defaultAppSettings && typeof p.defaultAppSettings === 'object' && p.defaultAppSettings !== null) {
+                this.emit('config-sync', { defaultAppSettings: p.defaultAppSettings as Record<string, unknown> })
+            }
+        } catch { /* ignore */ }
     }
     setConfig(config: Partial<ConnectionConfig>): void {
         this.connectionConfig = { ...this.connectionConfig, ...config }
     }
+
+    // Generates a short monotonic linkRequestId. UUID would be overkill for an
+    // in-process correlation key; a counter is unique within this renderer session
+    // and friendly to server-side log scanning.
+    private generateLinkRequestId(): string {
+        this.nextRequestId += 1
+        return `lri-${Date.now().toString(36)}-${this.nextRequestId.toString(36)}`
+    }
+
+    // Registers a pending response handler keyed by the given request id and returns
+    // the id the caller should send to the server. The dispatcher installed in
+    // setupEventHandlers() resolves/rejects this entry when a matching response
+    // arrives on the (possibly new) socket.
+    private registerPending(eventName: string, timeoutMs: number): { id: string; promise: Promise<unknown> } {
+        const id = this.generateLinkRequestId()
+        const promise = new Promise<unknown>((resolve, reject) => {
+            const timeoutHandle = setTimeout(() => {
+                const entry = this.pendingResponses.get(id)
+                if (entry) {
+                    this.pendingResponses.delete(id)
+                    reject(new Error(`${eventName} timed out after ${timeoutMs}ms`))
+                }
+            }, timeoutMs)
+            this.pendingResponses.set(id, { resolve, reject, timeoutHandle, eventName })
+        })
+        return { id, promise }
+    }
+
+    // Called from the long-lived socket.on() dispatcher in setupEventHandlers().
+    private dispatchResponse(eventName: string, payload: any): boolean {
+        const id = payload?.linkRequestId
+        if (!id) return false
+        const entry = this.pendingResponses.get(id)
+        if (!entry || entry.eventName !== eventName) return false
+        this.pendingResponses.delete(id)
+        clearTimeout(entry.timeoutHandle)
+        if (payload && payload.success === false) {
+            entry.reject(new Error(payload.error || `${eventName} failed`))
+        } else {
+            entry.resolve(payload)
+        }
+        return true
+    }
+
+    // On socket reconnect we just re-register the dispatch listeners; pending
+    // responses are unaffected since they're stored on the manager, not the socket.
+    private installResponseDispatchers(socket: Socket): void {
+        socket.on('vrchat-link-response', (payload: any) => {
+            // If the dispatcher handles it, done. Otherwise fall back to a one-shot
+            // (legacy/single-call behaviour) so older server builds that don't echo
+            // linkRequestId still resolve the in-flight promise.
+            if (this.dispatchResponse('vrchat-link-response', payload)) return
+            // Legacy path: no id present. Best-effort resolve of any pending
+            // vrchat-link-response entry — but only the most-recent one because we
+            // can't safely correlate without an id. Use the onResponse handler registered
+            // by the caller for forward-compat via a fallback event.
+            const legacyHandler = (this as any).__legacyVrchatLinkHandler
+            if (typeof legacyHandler === 'function') legacyHandler(payload)
+        })
+        socket.on('vrchat-link-status-response', (payload: any) => {
+            if (this.dispatchResponse('vrchat-link-status-response', payload)) return
+            const legacyHandler = (this as any).__legacyCheckLinkHandler
+            if (typeof legacyHandler === 'function') legacyHandler(payload)
+        })
+    }
     async connect(credentials: Credentials = {}): Promise<ConnectResult> {
         if (this.socket && this.isConnected) {
+            // Re-announce the current status so a renderer that (re)issues
+            // connect while we're already connected (e.g. after a renderer
+            // reload or login/logout cycle) doesn't get stuck waiting for a
+            // status push that will never come — pushes only fire on changes.
+            this.emit('connection-status', {
+                status: 'connected',
+                user: this.currentUser
+            })
             return { success: true, message: 'Already connected' }
         }
         if (this.socket) {
@@ -71,18 +339,35 @@ class WebSocketManager {
             const looksLikeDevHost = !socketUrl.includes('arcosc.app') && !socketUrl.includes('beta.arcosc.app')
             const isPackaged = !!app.isPackaged
             const allowInsecure = looksLikeDevHost && !isPackaged
+            // Capture the client's IANA timezone once at connect time.
+            // Sent in the Socket.IO query/auth payload so the server can
+            // store it alongside client_connection_history (per session).
+            // No new dependency \u2014 Intl is built into Node's main process.
+            // Falls back to undefined for hosts without ICU data.
+            let clientTimezone: string | undefined
+            try {
+                clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+            } catch {
+                clientTimezone = undefined
+            }
             this.socket = io(socketUrl, {
-                query: { username, password, clientVersion },
+                query: { username, password, clientVersion, timezone: clientTimezone },
                 transports: ['websocket'],
                 autoConnect: false,
                 reconnection: this.connectionConfig.autoReconnect,
                 reconnectionDelay: this.connectionConfig.reconnectDelay,
-                reconnectionAttempts: this.connectionConfig.maxReconnectAttempts,
+                reconnectionDelayMax: this.connectionConfig.reconnectDelay,
                 secure: socketUrl.startsWith('wss://'),
                 rejectUnauthorized: !allowInsecure,
                 forceNew: true
             })
             await this.setupEventHandlers()
+            // Install the correlation-id dispatchers on the freshly created socket.
+            // These survive Socket.IO internal reconnects because setupEventHandlers
+            // is also re-called in those paths, but the dispatchers themselves read
+            // pendingResponses from the manager (not the socket) so re-binding is
+            // automatic.
+            this.installResponseDispatchers(this.socket)
             return new Promise<ConnectResult>((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     reject(new Error('Connection timeout'))
@@ -92,11 +377,23 @@ class WebSocketManager {
                     this.isConnected = true
                     this.reconnectAttempts = 0
                     this.currentUser = { username }
+                    // Set sessionId once per (re)connect. Using timestamp +
+                    // reconnectAttempts as a unique-ish session identifier for
+                    // this client instantiation.
+                    if (!this.sessionId) {
+                        this.sessionId = `${Date.now()}-${this.reconnectAttempts}`
+                    }
                     resolve({ 
                         success: true, 
                         message: 'Connected successfully',
                         user: this.currentUser 
                     })
+                    // Drain buffered clientState snapshots if any
+                    this.clientStateChannel.drainBuffer()
+                    // Emit connect reason
+                    this.clientStateChannel.emit('connect')
+                    // Start heartbeat
+                    this.clientStateChannel.startHeartbeat()
                 })
                 this.socket!.once('connect_error', (error: Error & { type?: string; description?: string; context?: unknown; req?: { url?: string; method?: string; headers?: Record<string, string> } }) => {
                     clearTimeout(timeout)
@@ -123,21 +420,65 @@ class WebSocketManager {
     }
     async setupEventHandlers(): Promise<void> {
         if (!this.socket) return
+        // Universal server → client envelope dispatchers.
+        // ARC-OSC sends two envelope families on this socket:
+        //   client:command { command, payload, requestId?, ts } — server asks client to DO something
+        //   client:update  { topic, data,  requestId?, ts } — server announces a state change
+        // OSC continues to use the bare `osc-data` event (high-throughput hot path).
+        // Remove any existing listener before registering to prevent stacking across reconnects.
+        this.socket.removeAllListeners('client:command')
+        this.socket.on('client:command', (env: { command: string; payload?: unknown; requestId?: string; ts?: number } | unknown) => {
+            const e = env as { command?: string; payload?: unknown; requestId?: string; ts?: number }
+            if (!e || typeof e.command !== 'string') return
+            // requestId may live inside payload for some command types (e.g. check-modules)
+            const payloadObj = e.payload as { requestId?: string } | undefined
+            const requestId = e.requestId ?? payloadObj?.requestId
+            try {
+                this.emit(`client:command:${e.command}`, { payload: e.payload, requestId, ts: e.ts })
+            } catch { /* ignore */ }
+        })
+        this.socket.on('client:update', (env: { topic: string; data?: Record<string, unknown>; requestId?: string; ts?: number } | unknown) => {
+            const e = env as { topic?: string; data?: Record<string, unknown>; requestId?: string; ts?: number }
+            if (!e || typeof e.topic !== 'string') return
+            try {
+                this.emit(`client:update:${e.topic}`, { data: e.data ?? {}, requestId: e.requestId, ts: e.ts })
+            } catch { /* ignore */ }
+        })
+        // ── Server → client command handlers ──────────────────────────
+        // Each command is a native method below — the wiring here is
+        // just the event-name → method table (reconnect-safe: these
+        // are re-registered per setupEventHandlers call on a fresh
+        // socket, so no stacking is possible).
+        // NOTE: the handlers themselves are registered on the manager's
+        // event bus in the constructor (the envelope dispatcher above
+        // re-emits client:command there). Nothing socket-level to bind
+        // for individual commands.
+        // Install (or re-install) the request-id correlation dispatchers so any
+        // response that arrives after a Socket.IO internal reconnect still
+        // resolves the corresponding pending promise.
+        this.installResponseDispatchers(this.socket)
         this.socket.on('connect', () => {
             this.isConnected = true
             this.reconnectAttempts = 0
-            this.emit('connection-status', { 
-                status: 'connected', 
-                user: this.currentUser 
+            this.emit('connection-status', {
+                status: 'connected',
+                user: this.currentUser
             })
+            this.connectedAt = Date.now()
         })
         this.socket.on('disconnect', (reason: string) => {
             this.isConnected = false
             this.isAuthenticated = false
-            this.emit('connection-status', { 
-                status: 'disconnected', 
-                reason 
+            this.connectedAt = 0
+            this.emit('connection-status', {
+                status: 'disconnected',
+                reason
             })
+            if (reason === 'io server disconnect' && this.socket && this.connectionConfig.autoReconnect) {
+                try {
+                    this.socket.connect()
+                } catch { /* ignore — next reconnect cycle will retry */ }
+            }
         })
         this.socket.on('connect_error', (error: Error) => {
             this.isConnected = false
@@ -146,13 +487,11 @@ class WebSocketManager {
             console.error('WebSocket connection error:', {
                 message: error.message,
                 attempts: this.reconnectAttempts,
-                maxAttempts: this.connectionConfig.maxReconnectAttempts,
                 serverUrl: this.connectionConfig.serverUrl
             })
             this.emit('connection-error', { 
                 error: error.message,
-                attempts: this.reconnectAttempts,
-                maxAttempts: this.connectionConfig.maxReconnectAttempts
+                attempts: this.reconnectAttempts
             })
         })
         this.socket.on('connection-status', (data: { status: string }) => {
@@ -168,11 +507,24 @@ class WebSocketManager {
             console.log('WebSocket received avatar-change:', data)
             this.emit('avatar-change', data)
         })
+        this.socket.on('avatar-state-confirmed', (data: unknown) => {
+            this.emit('avatar-state-confirmed', data)
+        })
         this.socket.on('parameter-update', (data: unknown) => {
             this.emit('parameter-update', data)
         })
         this.socket.on('server-message', (data: unknown) => {
             this.emit('server-message', data)
+        })
+        // Server-initiated prompt asking for our current VRChat location
+        // context. No longer answered: the client does not forward instance
+        // or player roster data to the server. The server treats the
+        // silence as "unknown", which is the intended outcome.
+        // Server confirms it received our final shutdown batch.
+        // We log at info for diagnostics; no further action.
+        this.socket.on('statusFlushAck', (_data: { received?: boolean; ts?: number } | unknown) => {
+            try { (require('../services/debugger').default.info
+                ?? console.info)('[WebSocketManager] server acknowledged statusFlushAck') } catch { /* ignore */ }
         })
         this.socket.on('panel-connections-update', (data: unknown) => {
             this.emit('panel-connections-update', data)
@@ -197,7 +549,20 @@ class WebSocketManager {
             this.emit('unsuppress-denied', data)
         })
     }
+    /**
+     * Stop the clientState telemetry channel and close the socket.
+     * Called from app.on('before-quit') and explicit disconnect paths.
+     *
+     * `flushed` and `pending` describe the shutdown batch exchange;
+     * with no batch pending, both stay at their zero values.
+     */
+    flushAndClose(): { flushed: boolean; pending: number } {
+        this.clientStateChannel.stop()
+        try { this.disconnect() } catch { /* ignore */ }
+        return { flushed: false, pending: 0 }
+    }
     disconnect(): { success: boolean; message: string } {
+        this.clientStateChannel.stop()
         if (this.socket) {
             this.socket.removeAllListeners()
             this.socket.disconnect()
@@ -233,6 +598,61 @@ class WebSocketManager {
             this.socket!.emit('request-clear-all-suppressed')
         })
     }
+    setPanelState(kind: string, value: boolean): Promise<{ success: boolean; kind?: string; value?: boolean; changed?: boolean; error?: string }> {
+        if (!this.isConnected || !this.socket) {
+            return Promise.reject(new Error('Not connected to server'))
+        }
+        return new Promise((resolve) => {
+            this.socket!.once('set-panel-state-ack', resolve)
+            this.socket!.emit('set-panel-state', { kind, value })
+            setTimeout(() => {
+                this.socket?.off('set-panel-state-ack', resolve as any)
+                resolve({ success: false, error: 'Request timed out' })
+            }, 10000)
+        })
+    }
+    /**
+     * Toggle autostatus telemetry.
+     *
+     * Gates the `clientState` channel (active page + enabled modules +
+     * session id). Safe to call before connect — the snapshot fires on
+     * the next connect.
+     */
+    setTelemetryEnabled(enabled: boolean): void {
+        const wasEnabled = this.telemetryEnabled
+        this.telemetryEnabled = enabled === true
+        if (!wasEnabled && this.telemetryEnabled) {
+            // Just turned on — drain any buffered clientState snapshots
+            this.clientStateChannel.drainBuffer()
+        }
+        if (wasEnabled && !this.telemetryEnabled) {
+            // Turning off — stop heartbeat and clear pending debounce
+            this.clientStateChannel.stop()
+        }
+        if (this.isConnected && this.socket) {
+            try { this.socket.emit('clientState', this.buildClientStatePayload()) } catch { /* ignore */ }
+        }
+    }
+    private handleTelemetryCommand(env: unknown): void {
+        try {
+            const p = (env as { payload?: unknown } | null)?.payload as { enabled?: unknown } | undefined
+            if (!p || typeof p.enabled !== 'boolean') return
+            this.setTelemetryEnabled(p.enabled)
+            try {
+                const saver = (globalThis as any).__arc_saveClientTelemetry
+                if (typeof saver === 'function') saver(p.enabled)
+            } catch { /* ignore */ }
+            this.emit('telemetry-changed', { enabled: p.enabled, source: 'server' })
+        } catch { /* ignore */ }
+    }
+    // Read app.getVersion() lazily. Returns 'unknown' on any
+    // failure (e.g. when this is called outside Electron).
+    private readAppVersion(): string {
+        try {
+            const { app } = require('electron')
+            return app?.getVersion?.() ?? 'unknown'
+        } catch { return 'unknown' }
+    }
     sendMessage(event: string, data: unknown): Promise<unknown> {
         return new Promise((resolve, reject) => {
             if (!this.isConnected || !this.socket) {
@@ -243,7 +663,8 @@ class WebSocketManager {
                 'submit-feedback': 'feedback-response',
                 'get-feedback-list': 'feedback-list-response',
                 'vote-feedback': 'vote-feedback-response',
-                'get-user-feedback-stats': 'user-feedback-stats-response'
+                'get-user-feedback-stats': 'user-feedback-stats-response',
+                'submit-crash-report': 'crash-report-response'
             }
             if (responseEvents[event]) {
                 const responseHandler = (response: { success?: boolean; error?: string }) => {
@@ -266,45 +687,29 @@ class WebSocketManager {
         })
     }
     sendVRChatLink(vrchatUserId: string, vrchatUsername: string): Promise<unknown> {
-        return new Promise((resolve, reject) => {
-            if (!this.isConnected || !this.socket) {
-                reject(new Error('Not connected to server'))
-                return
-            }
-            const responseHandler = (response: { success?: boolean; error?: string }) => {
-                if (response.success) {
-                    resolve(response)
-                } else {
-                    reject(new Error(response.error || 'Failed to link VRChat account'))
-                }
-            }
-            this.socket.once('vrchat-link-response', responseHandler)
-            this.socket.emit('link-vrchat-account', {
-                vrchatUserId,
-                vrchatUsername
-            })
-            setTimeout(() => {
-                this.socket!.off('vrchat-link-response', responseHandler)
-                reject(new Error('Link request timed out'))
-            }, 10000)
+        if (!this.isConnected || !this.socket) {
+            return Promise.reject(new Error('Not connected to server'))
+        }
+        // Use the correlation-id dispatcher so a Socket.IO reconnect mid-flight
+        // doesn't orphan the in-flight request. The server echoes linkRequestId
+        // back in its response; installResponseDispatchers() reads it and
+        // resolves/rejects the matching pending entry.
+        const { id, promise } = this.registerPending('vrchat-link-response', 10000)
+        this.socket.emit('link-vrchat-account', {
+            vrchatUserId,
+            vrchatUsername,
+            linkRequestId: id
         })
+        return promise
     }
     checkVRChatLink(): Promise<unknown> {
-        return new Promise((resolve, reject) => {
-            if (!this.isConnected || !this.socket) {
-                reject(new Error('Not connected to server'))
-                return
-            }
-            const responseHandler = (response: unknown) => {
-                resolve(response)
-            }
-            this.socket.once('vrchat-link-status-response', responseHandler)
-            this.socket.emit('check-vrchat-link')
-            setTimeout(() => {
-                this.socket!.off('vrchat-link-status-response', responseHandler)
-                reject(new Error('Link status check timed out'))
-            }, 5000)
-        })
+        if (!this.isConnected || !this.socket) {
+            return Promise.reject(new Error('Not connected to server'))
+        }
+        // Correlation-id dispatch — see sendVRChatLink() above.
+        const { id, promise } = this.registerPending('vrchat-link-status-response', 5000)
+        this.socket.emit('check-vrchat-link', { linkRequestId: id })
+        return promise
     }
     getStatus(): { isConnected: boolean; isAuthenticated: boolean; currentUser: { username: string } | null; reconnectAttempts: number; serverUrl: string } {
         return {
