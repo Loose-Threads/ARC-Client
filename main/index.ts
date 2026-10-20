@@ -972,7 +972,7 @@ ipcMain.handle('check-vrchat-link', async () => {
     if (!wsManager || !wsManager.isConnected) {
       throw new Error('Not connected to ARC WebSocket server')
     }
-    debug.info(`Checking VRChat account link status`)
+    //debug.info(`Checking VRChat account link status`)
     const response = await wsManager.checkVRChatLink()
     //debug.info(`VRChat link status: ${response.linked ? 'linked' : 'not linked'}`)
     return response

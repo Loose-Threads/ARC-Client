@@ -80,6 +80,8 @@ interface AutoStatusSettings {
   cooldownSeconds: number
   timeFormat: string
   alwaysAllowOverride?: boolean
+  returnToInitial?: boolean
+  prioritySource?: 'schedule' | 'manual'
 }
 
 interface AutoStatusConfig {
@@ -210,7 +212,9 @@ class ConfigManager {
         settings: {
           cooldownSeconds: 10,
           timeFormat: '24h',
-          alwaysAllowOverride: false
+          alwaysAllowOverride: false,
+          returnToInitial: false,
+          prioritySource: 'schedule'
         }
       },
       // XS Overlay configuration

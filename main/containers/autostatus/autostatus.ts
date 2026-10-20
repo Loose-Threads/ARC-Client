@@ -33,6 +33,8 @@ interface AutoStatusScheduleEntry {
 interface AutoStatusSettings {
     cooldownSeconds?: number
     alwaysAllowOverride?: boolean
+    returnToInitial?: boolean
+    prioritySource?: 'schedule' | 'manual'
 }
 
 interface AutoStatusConfig {
@@ -80,6 +82,8 @@ class AutoStatus {
     currentStatus: string | null
     currentStatusDescription: string | null
     lastActiveScheduleEntryId: string | null
+    initialStatus: string | null
+    initialStatusDescription: string | null
 
     constructor() {
         this.config = this.loadConfig()
@@ -101,6 +105,9 @@ class AutoStatus {
         this.currentStatus = null
         this.currentStatusDescription = null
         this.lastActiveScheduleEntryId = null
+        // Initial status tracking
+        this.initialStatus = null
+        this.initialStatusDescription = null
         debug.info('[AutoStatus] Container initialized')
     }
 
@@ -171,6 +178,11 @@ class AutoStatus {
         if (vrchatApiContainer.isAuthenticated()) {
             const currentStatus = vrchatApiContainer.getCurrentUserStatus()
             this.syncCurrentStatus(currentStatus.status, currentStatus.statusDescription)
+            // Capture the initial status before ARC makes any changes
+            if (this.initialStatus === null) {
+                this.initialStatus = currentStatus.status
+                this.initialStatusDescription = currentStatus.statusDescription
+            }
         }
         this.startScheduleEngine()
         debug.info('[AutoStatus] Service started')
@@ -526,6 +538,8 @@ class AutoStatus {
         // Don't override externally set status
         if (this.externallySet && !this.config.settings?.alwaysAllowOverride) return
 
+        const prioritySource = this.config.settings?.prioritySource || 'schedule'
+
         const now = new Date()
         const currentDay = now.getDay() // 0=Sun
         const currentMinutes = now.getHours() * 60 + now.getMinutes()
@@ -558,13 +572,15 @@ class AutoStatus {
                 return
             }
         }
-        // No schedule matched — apply fallback if a timed entry just ended
+        // No schedule matched — a timed entry just ended
         if (this.lastActiveScheduleEntryId !== null) {
             const prevEntry = this.config.schedule.find(s => s.id === this.lastActiveScheduleEntryId)
             const fallback = prevEntry?.fallbackStatusType || null
             this.lastActiveScheduleEntryId = null
             this.lastSchedulePresetId = null
-            if (fallback) {
+            if (this.config.settings?.returnToInitial) {
+                this._returnToInitialStatus('schedule')
+            } else if (fallback) {
                 this._applyFallbackStatus(fallback)
             }
             return
@@ -588,12 +604,36 @@ class AutoStatus {
             this.lastStatusChangeTime = now
             this.lastAppliedPresetId = null
             this.recordArcStatusSet(applied.status, applied.statusDescription, now)
-            debug.info(`[AutoStatus] Applied schedule fallback status: ${statusType}`)
+            debug.info(`[AutoStatus] Applied fallback status: ${statusType}`)
             this.notifyStatusChange()
         } else {
             debug.error(`[AutoStatus] Failed to apply fallback status: ${result.error}`)
         }
     }
+
+    async _returnToInitialStatus(source: string): Promise<void> {
+        if (!this.vrchatApi || !this.vrchatApi.isAuthenticated()) return
+        if (this.externallySet && !this.config.settings?.alwaysAllowOverride) return
+        if (this.initialStatus === null && this.initialStatusDescription === null) return
+        const cooldown = (this.config.settings?.cooldownSeconds || 10) * 1000
+        const now = Date.now()
+        if (now - this.lastStatusChangeTime < cooldown) {
+            debug.info(`[AutoStatus] Cooldown active, skipping return-to-initial from ${source}`)
+            return
+        }
+        const result = await this.vrchatApi.setStatus(this.initialStatus, this.initialStatusDescription)
+        if (result.success) {
+            const applied = this.getResultStatusValues(result, this.initialStatus, this.initialStatusDescription)
+            this.lastStatusChangeTime = now
+            this.lastAppliedPresetId = null
+            this.recordArcStatusSet(applied.status, applied.statusDescription, now)
+            debug.info(`[AutoStatus] Returned to initial status from ${source}: ${this.initialStatus} — "${this.initialStatusDescription || ''}"`)
+            this.notifyStatusChange()
+        } else {
+            debug.error(`[AutoStatus] Failed to return to initial status: ${result.error}`)
+        }
+    }
+
 
     // --- Settings ---
 
@@ -621,6 +661,10 @@ class AutoStatus {
         externallySet: boolean
         currentStatus: string | null
         currentStatusDescription: string | null
+        initialStatus: string | null
+        initialStatusDescription: string | null
+        returnToInitial: boolean
+        prioritySource: 'schedule' | 'manual'
     } {
         return {
             lastAppliedPresetId: this.lastAppliedPresetId,
@@ -633,7 +677,11 @@ class AutoStatus {
             vrchatApiAvailable: !!(this.vrchatApi && this.vrchatApi.isAuthenticated()),
             externallySet: this.externallySet,
             currentStatus: this.currentStatus,
-            currentStatusDescription: this.currentStatusDescription
+            currentStatusDescription: this.currentStatusDescription,
+            initialStatus: this.initialStatus,
+            initialStatusDescription: this.initialStatusDescription,
+            returnToInitial: !!this.config.settings?.returnToInitial,
+            prioritySource: this.config.settings?.prioritySource || 'schedule'
         }
     }
 
