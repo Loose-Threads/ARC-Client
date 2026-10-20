@@ -117,7 +117,7 @@ const transcript = ref<WhisperTranscriptEntry[]>([])
 const inputLevel = ref(0)
 const downloadProgress = ref<WhisperDownloadProgress | null>(null)
 const devices = ref<WhisperInputDevice[]>([])
-const lastFired = ref<{ name: string; direction: 'forward' | 'reverse'; at: number } | null>(null)
+const lastFired = ref<{ id: string; name: string; direction: 'forward' | 'reverse'; at: number } | null>(null)
 const collapsedIds = ref<Set<string>>(new Set())
 const lastSavedAt = ref<number>(0)
 const dirtyCommandIds = ref<Set<string>>(new Set())
@@ -171,7 +171,12 @@ function registerListeners() {
           ...transcript.value
         ].slice(0, MAX_TRANSCRIPT_ENTRIES)
         if (data.matchedCommandName) {
-          lastFired.value = { name: data.matchedCommandName, direction: data.matchedDirection, at: Date.now() }
+          lastFired.value = {
+            id: typeof data.matchedCommandId === 'string' ? data.matchedCommandId : '',
+            name: data.matchedCommandName,
+            direction: data.matchedDirection,
+            at: Date.now()
+          }
         }
       }
     } else if (data.type === 'download-progress') {
@@ -249,8 +254,7 @@ function coerceValue(raw: string | number | boolean | null | undefined, type: Wh
 
 function buildPayload() {
   return {
-    commands: JSON.parse(JSON.stringify(commands.value.map(normalizeCommand))),
-    categories: [...categories.value]
+    commands: JSON.parse(JSON.stringify(commands.value.map(normalizeCommand)))
   }
 }
 

@@ -329,7 +329,7 @@ export class WhisperAddon {
 
   constructor() {
     const cfg = configManager.getWhisperConfig()
-    this.modelPath = cfg.modelPath ?? null
+    this.modelPath = cfg.modelDir ?? null
     this.currentInputDeviceId = cfg.inputDeviceId ?? null
     this.currentInputGain = cfg.inputGain ?? 1.0
     this.currentMinInputLevel = cfg.minInputLevel ?? 0
@@ -1019,7 +1019,7 @@ export class WhisperAddon {
       const previousModelPath = this.modelPath
       const previousGain = this.currentInputGain
       const previousMinUtteranceMs = this.currentMinUtteranceMs
-      this.modelPath = cfg.modelPath ?? null
+      this.modelPath = cfg.modelDir ?? null
       this.currentInputDeviceId = cfg.inputDeviceId ?? null
       this.currentInputGain = cfg.inputGain ?? 1.0
       this.currentMinInputLevel = cfg.minInputLevel ?? 0
@@ -1336,7 +1336,7 @@ export class WhisperAddon {
       // interface). The concrete OscService.sendOscArgs sanitizes
       // NaN/Infinity numeric values and maps bool args to T/F tags.
       try {
-        this.oscService.sendOscArgs(p.address, [{ type: p.type, value: value as number | string | boolean }])
+        this.oscService.sendMessage(p.address, [{ type: p.type, value: value as number | string | boolean }])
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         debug.warn(`[whisper] OSC send failed for ${p.address}: ${message}`)

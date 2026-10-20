@@ -266,7 +266,7 @@ export function createWhisperPageState() {
       modelDirError.value = 'Enter a path to a .bin model file.'
       return
     }
-    const result = await updateSettings({ modelPath: file })
+    const result = await updateSettings({ modelDir: file })
     if (!result?.success) {
       modelDirError.value = result?.error || 'File is not a valid Whisper ggml model'
     } else {
@@ -276,7 +276,7 @@ export function createWhisperPageState() {
   async function clearModelPath() {
     modelDirError.value = ''
     modelPathDraft.value = ''
-    await updateSettings({ modelPath: null })
+    await updateSettings({ modelDir: null })
   }
   function openModelList() {
     void api.openExternal(status.value.modelListUrl)

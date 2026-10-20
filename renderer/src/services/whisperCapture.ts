@@ -27,7 +27,7 @@ interface CaptureControlPayload {
   devices?: ReadonlyArray<{ id: string; name: string }>
 }
 
-interface ElectronAPI {
+interface WhisperCaptureApi {
   onWhisperCaptureControl(cb: (control: CaptureControlPayload) => void): () => void
   whisperSendAudio(chunk: ArrayBuffer, sampleRate: number, level: number): void
   // Dedicated level channel. Level events used to flow through
@@ -36,12 +36,6 @@ interface ElectronAPI {
   // causing a feedback loop on loud mics. Split this out so the
   // UI level meter and the mic gain are independent.
   onWhisperLevel(cb: (level: number) => void): () => void
-}
-
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI
-  }
 }
 
 let audioContext: AudioContext | null = null
@@ -68,8 +62,8 @@ async function ensureWorkletUrl(): Promise<string> {
   return workletBlobUrl
 }
 
-function api(): ElectronAPI {
-  return window.electronAPI
+function api(): WhisperCaptureApi {
+  return window.electronAPI as unknown as WhisperCaptureApi
 }
 
 export function onWhisperLevel(listener: LevelListener): Unsubscribe {

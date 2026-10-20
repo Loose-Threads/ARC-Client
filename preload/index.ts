@@ -13,6 +13,12 @@ interface WhisperConfigUpdate {
   inputGain?: number
   minInputLevel?: number
   minUtteranceMs?: number
+  // Full command + category arrays are sent when the renderer
+  // persists the Voice Commands section. Loosely typed because the
+  // canonical WhisperCommand shape lives in the renderer + main
+  // process, which cannot be imported here.
+  commands?: unknown[]
+  categories?: string[]
 }
 
 const api = {

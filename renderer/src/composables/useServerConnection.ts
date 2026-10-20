@@ -202,9 +202,17 @@ export function useServerConnection() {
 
   onMounted(async () => {
     await initialize()
+    api.onVrchatAvatarChange((data: any) => {
+      localAvatarId.value = typeof data?.id === 'string' && data.id.length > 0 ? data.id : null
+    })
+    api.onWebSocketAvatarStateConfirmed((data: any) => {
+      confirmedAvatarId.value = typeof data?.id === 'string' && data.id.length > 0 ? data.id : null
+    })
   })
 
   const pendingPanelToggles = ref<Set<string>>(new Set())
+  const localAvatarId = ref<string | null>(null)
+  const confirmedAvatarId = ref<string | null>(null)
   async function setPanelState(kind: string, value: boolean) {
     if (pendingPanelToggles.value.has(kind)) return
     pendingPanelToggles.value.add(kind)
@@ -221,6 +229,8 @@ export function useServerConnection() {
     isAuthenticated,
     currentUser,
     currentAvatar,
+    localAvatarId,
+    confirmedAvatarId,
     parameters,
     panelConnectionsData,
     pendingPanelToggles,
