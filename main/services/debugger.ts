@@ -85,14 +85,14 @@ class Debugger {
       console.error('Failed to clean old log files:', err)
     }
   }
-  log(level: string, message: string, data: unknown = null): void {
+  log(level: string, message: string, data: unknown = null, echoToConsole = true): void {
     const timestamp = new Date().toISOString()
     const uptime = Math.round((Date.now() - this.startTime) / 1000);
     let logEntry = `[${timestamp}] [+${uptime}s] [${level.toUpperCase()}] ${message}`
     if (data) {
       logEntry += `\nData: ${JSON.stringify(data, null, 2)}`
     }
-    console.log(logEntry)
+    if (echoToConsole) console.log(logEntry)
     try {
       fs.appendFileSync(this.logFile, logEntry + '\n')
     } catch (err) {
@@ -110,6 +110,15 @@ class Debugger {
   }
   debug(message: string, data: unknown = null): void {
     this.log('debug', message, data)
+  }
+  /**
+   * High-frequency diagnostic chatter (timer ticks, discovery retries, per-message
+   * breadcrumbs). Always written to the log file for post-mortem analysis but
+   * never echoed to the console, so routine runtime noise stays out of the
+   * terminal while remaining fully available when debugging.
+   */
+  trace(message: string, data: unknown = null): void {
+    this.log('trace', message, data, false)
   }
   oscMessageReceived(address: string, _value: unknown, _type: string): void {
     this.oscMessageCount++

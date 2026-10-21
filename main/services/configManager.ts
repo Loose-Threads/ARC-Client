@@ -58,7 +58,7 @@ export interface WhisperCommand {
 }
 
 export interface WhisperConfig {
-  modelDir: string | null
+  modelPath: string | null
   inputDeviceId: string | null
   minInputLevel: number
   inputGain: number
@@ -214,7 +214,7 @@ class ConfigManager {
       },
       // Whisper configuration
       whisper: {
-        modelDir: null,
+        modelPath: null,
         inputDeviceId: null,
         minInputLevel: 0,
         inputGain: 1,
@@ -587,7 +587,7 @@ class ConfigManager {
   getWhisperConfig(): WhisperConfig {
     const stored = (this.config.whisper || {}) as Partial<WhisperConfig>
     this.config.whisper = {
-      modelDir: stored.modelDir ?? null,
+      modelPath: stored.modelPath ?? null,
       inputDeviceId: stored.inputDeviceId ?? null,
       minInputLevel: typeof stored.minInputLevel === 'number' ? stored.minInputLevel : 0,
       inputGain: typeof stored.inputGain === 'number' ? stored.inputGain : 1,

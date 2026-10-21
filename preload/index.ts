@@ -8,7 +8,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 // configManager pulls in electron + better-sqlite3, which would break
 // the build context isolation boundary.
 interface WhisperConfigUpdate {
-  modelDir?: string | null
+  modelPath?: string | null
   inputDeviceId?: string | null
   inputGain?: number
   minInputLevel?: number

@@ -78,7 +78,7 @@ compiled.filename = filename
 compiled.paths = Module._nodeModulePaths(path.dirname(filename))
 const originalRequire = compiled.require.bind(compiled)
 compiled.require = name => name === './debugger.js'
-    ? { info() {}, warn() {}, error() {} } : originalRequire(name)
+    ? { info() {}, warn() {}, error() {}, trace() {} } : originalRequire(name)
 compiled._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
 }).outputText, filename)

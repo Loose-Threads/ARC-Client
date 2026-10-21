@@ -314,7 +314,7 @@ class HyperateAddon {
     if (slot.cancelled) return
     const apiKey = this.secrets!.hyperate!.apiKey
     const apiUrl = `wss://app.hyperate.io/socket/websocket?token=${apiKey}`
-    debug.info(`[hyperate:${deviceId}] connecting...`)
+    debug.trace(`[hyperate:${deviceId}] connecting...`)
     try {
       const ws = new WebSocket(apiUrl)
       slot.ws = ws
@@ -323,7 +323,7 @@ class HyperateAddon {
         slot.reconnectAttempts = 0
         slot.lastHrUpdate = null
         slot.watchdogCount = 0
-        debug.info(`[hyperate:${deviceId}] connected`)
+        debug.trace(`[hyperate:${deviceId}] connected`)
         // Join this tracker's topic immediately. Each socket only subscribes
         // to one hr:X topic to avoid the HypeRate fan-out limitation.
         try {
@@ -333,7 +333,7 @@ class HyperateAddon {
             payload: {},
             ref: 0
           }))
-          debug.info(`[hyperate:${deviceId}] phx_join sent`)
+          debug.trace(`[hyperate:${deviceId}] phx_join sent`)
         } catch (e) {
           debug.warn(`[hyperate:${deviceId}] phx_join failed: ${(e as Error).message}`)
         }
@@ -344,7 +344,7 @@ class HyperateAddon {
         this.notifyStatusChange()
       })
       ws.on('close', () => {
-        debug.info(`[hyperate:${deviceId}] connection closed`)
+        debug.trace(`[hyperate:${deviceId}] connection closed`)
         if (slot.heartbeatInterval) { clearInterval(slot.heartbeatInterval); slot.heartbeatInterval = null }
         if (slot.watchdogInterval) { clearInterval(slot.watchdogInterval); slot.watchdogInterval = null }
         slot.ws = null
@@ -381,7 +381,7 @@ class HyperateAddon {
       slot.reconnectAttempts = 0
     }
     slot.reconnectAttempts++
-    debug.info(`[hyperate:${deviceId}] scheduling reconnect attempt ${slot.reconnectAttempts} in ${this.reconnectDelay / 1000}s`)
+    debug.trace(`[hyperate:${deviceId}] scheduling reconnect attempt ${slot.reconnectAttempts} in ${this.reconnectDelay / 1000}s`)
     slot.reconnectTimeout = setTimeout(() => {
       slot.reconnectTimeout = null
       if (this.enabled && !slot.cancelled) {

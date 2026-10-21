@@ -16,7 +16,6 @@ export interface WhisperCommand {
   reversePhrase?: string
   matchType: 'exact' | 'contains'
   enabled: boolean
-  category?: string
   parameters: WhisperCommandParam[]
 }
 
@@ -42,8 +41,7 @@ export interface WhisperStatus {
     | 'stopping'
     | 'error'
   modelState: 'missing' | 'invalid' | 'downloading' | 'extracting' | 'ready'
-  modelDir: string | null
-  usingDefaultModel: boolean
+  modelPath: string | null
   modelListUrl: string
   sampleRate: number | null
   inputDeviceId: string | null
@@ -90,8 +88,7 @@ const defaultStatus: WhisperStatus = {
   enabled: false,
   engineState: 'stopped',
   modelState: 'missing',
-  modelDir: null,
-  usingDefaultModel: true,
+  modelPath: null,
   modelListUrl: 'https://github.com/ggerganov/whisper.cpp/tree/main/models',
   sampleRate: null,
   inputDeviceId: null,
@@ -108,7 +105,6 @@ const defaultStatus: WhisperStatus = {
 // transcript/status survive page navigation
 const status = ref<WhisperStatus>({ ...defaultStatus })
 const commands = ref<WhisperCommand[]>([])
-const categories = ref<string[]>([])
 const autostart = ref(false)
 // Whisper has no per-chunk partial results — emit a single placeholder string
 // the UI can show while the engine is "listening for an utterance"
@@ -151,8 +147,14 @@ function ensureCollapsedOnFirstLoad(list: WhisperCommand[]): void {
 
 function registerListeners() {
   if (listenersRegistered) return
-  listenersRegistered = true
   const api = useElectronAPI()
+  // Only mark registered AFTER the bridge is reachable and listeners
+  // are actually attached. Previously the flag was set before the
+  // onWhisperUpdate call — if useElectronAPI() threw on an early
+  // mount, the flag stayed true forever and every whisper-update push
+  // from the main process was silently dropped, leaving the UI stuck
+  // on whatever status was last pulled. Navigating away/back masked it
+  // because WhisperPage's onMounted calls refreshStatus() again.
   api.onWhisperUpdate((data: any) => {
     if (data.type === 'status') {
       const { type: _type, ...rest } = data
@@ -171,6 +173,9 @@ function registerListeners() {
           ...transcript.value
         ].slice(0, MAX_TRANSCRIPT_ENTRIES)
         if (data.matchedCommandName) {
+          // Keyed by command ID (not name) so two commands that share a
+          // name don't both flash when only one fired. Falls back to name
+          // matching for old push payloads that lack matchedCommandId.
           lastFired.value = {
             id: typeof data.matchedCommandId === 'string' ? data.matchedCommandId : '',
             name: data.matchedCommandName,
@@ -187,10 +192,13 @@ function registerListeners() {
         totalBytes: data.totalBytes ?? 0,
         error: data.error
       }
-      if (data.state === 'done') {
+      // Main process emits state:'ready' on successful download; the
+      // renderer's downloadProgress type only declared 'done'. Accept
+      // both so the bar auto-clears.
+      if (data.state === 'done' || data.state === 'ready') {
         void refreshStatus()
         setTimeout(() => {
-          if (downloadProgress.value?.state === 'done') downloadProgress.value = null
+          if (downloadProgress.value?.state === data.state) downloadProgress.value = null
         }, 1500)
       }
     }
@@ -198,6 +206,7 @@ function registerListeners() {
   onWhisperLevel((level: number) => {
     inputLevel.value = level
   })
+  listenersRegistered = true
 }
 
 async function refreshStatus() {
@@ -213,7 +222,6 @@ async function refreshConfig() {
   const config = await api.whisperGetConfig()
   if (config) {
     commands.value = config.commands || []
-    categories.value = config.categories || []
     dirtyCommandIds.value = new Set()
     ensureCollapsedOnFirstLoad(commands.value)
   }
@@ -273,7 +281,6 @@ export function normalizeCommand(command: WhisperCommand): WhisperCommand {
     reversePhrase: command.reversePhrase?.trim() || undefined,
     matchType: command.matchType,
     enabled: !!command.enabled,
-    category: command.category?.trim() || undefined,
     parameters: command.parameters
       .filter(param => param.address.trim())
       .map(param => ({
@@ -330,13 +337,15 @@ export function useWhisper() {
   async function toggle(): Promise<{ success: boolean; error?: string }> {
     if (status.value.enabled) {
       const result = await api.whisperStop()
+      // Always pull after a state change — the push event is the
+      // first-source signal, but a final pull guarantees the UI
+      // reflects truth even if the push was dropped (e.g. early mount
+      // before listeners were registered).
       await refreshStatus()
       return result ?? { success: false }
     }
     const result = await api.whisperStart()
-    if (!result?.success) {
-      await refreshStatus()
-    }
+    await refreshStatus()
     return result ?? { success: false }
   }
 
@@ -364,7 +373,7 @@ export function useWhisper() {
     return result
   }
 
-  async function updateSettings(partialConfig: { minInputLevel?: number; inputGain?: number; modelDir?: string | null; minUtteranceMs?: number }) {
+  async function updateSettings(partialConfig: { minInputLevel?: number; inputGain?: number; modelPath?: string | null; minUtteranceMs?: number }) {
     const result = await api.whisperUpdateConfig(partialConfig)
     await refreshStatus()
     return result
@@ -429,44 +438,6 @@ export function useWhisper() {
     await refreshConfig()
   }
 
-  async function addCategory(name: string): Promise<boolean> {
-    const trimmed = name.trim()
-    if (!trimmed) return false
-    if (categories.value.includes(trimmed)) return false
-    categories.value = [...categories.value, trimmed]
-    try {
-      await persistAll()
-      return true
-    } catch {
-      categories.value = categories.value.filter(c => c !== trimmed)
-      return false
-    }
-  }
-
-  async function removeCategory(name: string): Promise<void> {
-    const prevCategories = [...categories.value]
-    const prevCommands = commands.value.map(c => ({ ...c }))
-    categories.value = categories.value.filter(c => c !== name)
-    commands.value = commands.value.map(c => c.category === name ? { ...c, category: undefined } : c)
-    for (const c of commands.value) {
-      if (c.category === undefined && prevCommands.find(p => p.id === c.id)?.category === name) {
-        markDirty(c.id)
-      }
-    }
-    try {
-      await persistAll()
-      for (const c of commands.value) markClean(c.id)
-    } catch {
-      categories.value = prevCategories
-      commands.value = prevCommands
-    }
-  }
-
-  function setCommandCategory(commandId: string, category: string | undefined): void {
-    commands.value = commands.value.map(c => c.id === commandId ? { ...c, category } : c)
-    markDirty(commandId)
-  }
-
   function fireInput(commandId: string): void { markDirty(commandId) }
 
   async function commitCommands(next: WhisperCommand[]) {
@@ -487,7 +458,6 @@ export function useWhisper() {
   return {
     status,
     commands,
-    categories,
     autostart,
     partial,
     transcript,
@@ -516,9 +486,6 @@ export function useWhisper() {
     saveAllDirty,
     discardAllDirty,
     toggleCollapse,
-    addCategory,
-    removeCategory,
-    setCommandCategory,
     fireInput,
     isDirty,
     isSaving,
