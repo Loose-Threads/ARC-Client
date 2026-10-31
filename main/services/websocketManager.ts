@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client'
+import { randomUUID } from 'node:crypto'
 import { ClientStateChannel } from './clientStateChannel'
 
 interface ConnectionConfig {
@@ -114,6 +115,36 @@ class WebSocketManager {
             sessionId: this.sessionId,
             telemetryEnabled: this.telemetryEnabled,
         }
+    }
+
+    /**
+     * Return the client session id, generating it on first use.
+     *
+     * The id identifies THIS client installation and is stable across
+     * reconnects. The server uses it as one of three independent
+     * auth-failure budgets (per-IP, per-account, per-session), so a
+     * client that rotates addresses and targets many accounts is
+     * still bounded.
+     *
+     * It is a CORRELATION signal, not a credential — the server never
+     * trusts it for authorization, only as a rate-limit key.
+     *
+     * The format is deliberately constrained to what the server
+     * accepts: 8-64 characters of `[A-Za-z0-9_-]`. The server
+     * validates the shape and rejects anything else, so a malformed
+     * value must not be produced here in the first place.
+     *
+     * `randomUUID` comes from `node:crypto`, so there is no new
+     * dependency.
+     */
+    private _ensureSessionId(): string {
+        if (!this.sessionId) {
+            // The 'n' (node) variant without dashes still satisfies the
+            // server's shape check, and the prefix keeps the value
+            // recognisable in logs.
+            this.sessionId = `c${randomUUID().replace(/-/g, '')}`
+        }
+        return this.sessionId
     }
 
     /**
@@ -350,8 +381,21 @@ class WebSocketManager {
             } catch {
                 clientTimezone = undefined
             }
+            // The client session id, sent on every handshake.
+            //
+            // It identifies THIS client installation and is stable
+            // across reconnects. The server uses it as one of three
+            // independent auth-failure budgets (per-IP, per-account,
+            // per-session), so a client that rotates addresses and
+            // targets many accounts is still bounded.
+            //
+            // It is a CORRELATION signal, not a credential — the server
+            // never trusts it for authorization. It is generated once
+            // per installation and reused, so the budget is per
+            // installation rather than per connection.
+            const handshakeSessionId = this._ensureSessionId()
             this.socket = io(socketUrl, {
-                query: { username, password, clientVersion, timezone: clientTimezone },
+                query: { username, password, clientVersion, timezone: clientTimezone, sessionId: handshakeSessionId },
                 transports: ['websocket'],
                 autoConnect: false,
                 reconnection: this.connectionConfig.autoReconnect,
@@ -377,12 +421,12 @@ class WebSocketManager {
                     this.isConnected = true
                     this.reconnectAttempts = 0
                     this.currentUser = { username }
-                    // Set sessionId once per (re)connect. Using timestamp +
-                    // reconnectAttempts as a unique-ish session identifier for
-                    // this client instantiation.
-                    if (!this.sessionId) {
-                        this.sessionId = `${Date.now()}-${this.reconnectAttempts}`
-                    }
+                    // The session id is already set by `_ensureSessionId()`
+                    // before the handshake, so it is stable across
+                    // reconnects. This is a no-op guard for the case
+                    // where the connect handler runs without a prior
+                    // `_ensureSessionId()` call.
+                    this._ensureSessionId()
                     resolve({ 
                         success: true, 
                         message: 'Connected successfully',
