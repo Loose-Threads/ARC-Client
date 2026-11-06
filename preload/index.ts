@@ -161,10 +161,12 @@ const api = {
   openShockLogout: () => ipcRenderer.invoke('openshock-logout'),
   openShockGetLoginStatus: () => ipcRenderer.invoke('openshock-get-login-status'),
   openShockClearSavedCredentials: () => ipcRenderer.invoke('openshock-clear-saved-credentials'),
-  // XS Overlay API
+  // ARC Link API
   arcLinkStart: () => ipcRenderer.invoke('arclink-start'),
   arcLinkStop: () => ipcRenderer.invoke('arclink-stop'),
   arcLinkGetStatus: () => ipcRenderer.invoke('arclink-get-status'),
+  arcLinkGetConfig: () => ipcRenderer.invoke('arclink-get-config'),
+  arcLinkUpdateConfig: (config: any) => ipcRenderer.invoke('arclink-update-config', config),
   // XS Overlay API
   xsOverlayGetStatus: () => ipcRenderer.invoke('xsoverlay-get-status'),
   xsOverlayStart: () => ipcRenderer.invoke('xsoverlay-start'),
@@ -269,6 +271,12 @@ const api = {
   },
   onOSCLeashStatusUpdate: (callback: (data: any) => void) => {
     ipcRenderer.on('oscleash-status-update', (_event, data) => callback(data))
+  },
+  onARCLinkStatusUpdate: (callback: (data: any) => void) => {
+    ipcRenderer.on('arclink-status-update', (_event, data) => callback(data))
+  },
+  onARCLinkMovement: (callback: (data: any) => void) => {
+    ipcRenderer.on('arclink-movement-data', (_event, data) => callback(data))
   },
   onHyperateUpdate: (callback: (data: any) => void) => {
     ipcRenderer.on('hyperate-update', (_event, data) => callback(data))

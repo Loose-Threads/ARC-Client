@@ -2288,6 +2288,18 @@ ipcMain.handle('arclink-get-status', async () => {
   if (!arcLinkContainer) return { success: false, error: 'Not initialized' }
   return arcLinkContainer.getStatus()
 })
+ipcMain.handle('arclink-get-config', async () => {
+  if (!arcLinkContainer) return { success: false, error: 'Not initialized' }
+  return configManager.getARCLinkConfig()
+})
+ipcMain.handle('arclink-update-config', async (_event, config: any) => {
+  if (!arcLinkContainer) return { success: false, error: 'Not initialized' }
+  const result = arcLinkContainer.updateConfig(config ?? {})
+  if (result.success) {
+    configManager.updateARCLinkConfig(config ?? {})
+  }
+  return result
+})
 // XS Overlay IPC handlers
 ipcMain.handle('xsoverlay-get-status', () => {
   if (xsOverlayAddon) {
@@ -2431,6 +2443,18 @@ app.whenReady().then(async () => {
   await calendarContainer.init()
   await openShockContainer.init()
   await arcLinkContainer.init()
+  // Forward the ARC Link status and movement frames to the renderer so
+  // the module page can show live diagnostics.
+  arcLinkContainer.on('status', (status: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('arclink-status-update', status)
+    }
+  })
+  arcLinkContainer.on('movement', (movement: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('arclink-movement-data', movement)
+    }
+  })
   // Set up HypeRate status and heart rate callbacks
   hyperateAddon.setStatusChangeCallback((status: any) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
