@@ -143,6 +143,29 @@ interface XSOverlayConfig {
 interface OpenShockConfig {
   [key: string]: unknown
 }
+interface ARCLinkConfig {
+  localIp: string
+  inPort: number
+  outPort: number
+  peerIp: string
+  peerOutPort: number
+  vrchatIp: string
+  vrchatInPort: number
+  yawSign: number
+  forwardIsNegativeZ: boolean
+  angularYSign: number
+  maxSpeed: number
+  maxTurnRate: number
+  smoothing: number
+  deadzone: number
+  refreshIntervalMs: number
+  echoSuppressMs: number
+  mirrorJump: boolean
+  enableParameter: string
+  startEnabled: boolean
+  logging: boolean
+  [key: string]: unknown
+}
 interface AppConfig {
   legacyOscPort: number
   targetOscPort: number
@@ -162,6 +185,7 @@ interface AppConfig {
   autostatus: AutoStatusConfig
   xsOverlay: XSOverlayConfig
   openshock: OpenShockConfig
+  arclink: ARCLinkConfig
   configVersion: number
   [key: string]: unknown
 }
@@ -288,6 +312,29 @@ class ConfigManager {
       },
       // OpenShock configuration
       openshock: {},
+      // ARC Link configuration
+      arclink: {
+        localIp: '0.0.0.0',
+        inPort: 9001,
+        outPort: 9010,
+        peerIp: '127.0.0.1',
+        peerOutPort: 9010,
+        vrchatIp: '127.0.0.1',
+        vrchatInPort: 9000,
+        yawSign: 1,
+        forwardIsNegativeZ: false,
+        angularYSign: 1,
+        maxSpeed: 3.0,
+        maxTurnRate: 2.0,
+        smoothing: 0.35,
+        deadzone: 0.02,
+        refreshIntervalMs: 100,
+        echoSuppressMs: 500,
+        mirrorJump: true,
+        enableParameter: 'ArcLink',
+        startEnabled: false,
+        logging: false
+      },
       // Version for future migration support
       configVersion: 1
     }
@@ -712,6 +759,44 @@ class ConfigManager {
       ...ogbConfig
     }
     debug.info('OscGoesBrrr config updated in configuration manager')
+    return this.saveConfig()
+  }
+  getARCLinkConfig(): ARCLinkConfig {
+    if (!this.config.arclink) {
+      this.config.arclink = {
+        localIp: '0.0.0.0',
+        inPort: 9001,
+        outPort: 9010,
+        peerIp: '127.0.0.1',
+        peerOutPort: 9010,
+        vrchatIp: '127.0.0.1',
+        vrchatInPort: 9000,
+        yawSign: 1,
+        forwardIsNegativeZ: false,
+        angularYSign: 1,
+        maxSpeed: 3.0,
+        maxTurnRate: 2.0,
+        smoothing: 0.35,
+        deadzone: 0.02,
+        refreshIntervalMs: 100,
+        echoSuppressMs: 500,
+        mirrorJump: true,
+        enableParameter: 'ArcLink',
+        startEnabled: false,
+        logging: false
+      }
+    }
+    return { ...this.config.arclink }
+  }
+  updateARCLinkConfig(arclinkConfig: Partial<ARCLinkConfig>): boolean {
+    if (!this.config.arclink) {
+      this.config.arclink = {} as ARCLinkConfig
+    }
+    this.config.arclink = {
+      ...this.config.arclink,
+      ...arclinkConfig
+    }
+    debug.info('ARCLink config updated in configuration manager')
     return this.saveConfig()
   }
 }

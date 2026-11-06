@@ -29,6 +29,7 @@
     "smoke:whisper": "node scripts/smoke-whisper-worker.mjs",
     "test:oscquery": "node --test tests/test-oscquery.cjs",
     "test:crashreport": "node --test tests/test-crash-report.cjs",
+    "test:arclink": "node --test tests/test-arclink.cjs",
     "pack": "electron-builder --dir",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
