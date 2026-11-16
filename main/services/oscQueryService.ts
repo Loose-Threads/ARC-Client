@@ -123,6 +123,11 @@ class OSCQueryService extends EventEmitter {
     READVERTISE_INTERVAL: number
     serverBlocklist: Set<string>
     serverSuppressions: Set<string>
+    // Compiled matcher cache for the per-message unsubscription filter.
+    // Rebuilt lazily whenever any of the source sets change, never per message.
+    _matcherDirty: boolean
+    _exactMatchers: Set<string>
+    _wildcardMatchers: RegExp[]
     serverSuppressionMetadata: SuppressionMetadata
     localOnlyPatterns: Set<string>
     rootNode: OscQueryNode
@@ -180,6 +185,10 @@ class OSCQueryService extends EventEmitter {
         this.serverBlocklist = new Set()
         // Server-managed suppressions (dynamic, from rate monitoring)
         this.serverSuppressions = new Set()
+        // Compiled matcher cache (see _ensureMatchers)
+        this._matcherDirty = true
+        this._exactMatchers = new Set()
+        this._wildcardMatchers = []
         // Local-only addresses: received by modules but never forwarded to the server
         this.localOnlyPatterns = new Set()
         // Per-address metadata from server (isPanelParam, isInAvatarJson)
@@ -412,56 +421,73 @@ class OSCQueryService extends EventEmitter {
      * @private
      */
     _matchesUnsubscription(address: string): boolean {
-        // Check hardcoded unsubscriptions first (cannot be removed by users)
-        for (const pattern of this.hardcodedUnsubscriptions) {
-            if (this._matchPattern(address, pattern)) {
-                return true; // Hardcoded match found, always ignore
-            }
-        }
-        // Check server-managed blocklist (pushed from ARC-OSC server)
-        for (const pattern of this.serverBlocklist) {
-            if (this._matchPattern(address, pattern)) {
-                return true; // Server blocklist match, always ignore
-            }
-        }
-        // Check server-managed suppressions (dynamic rate-based)
-        for (const pattern of this.serverSuppressions) {
-            if (this._matchPattern(address, pattern)) {
-                return true; // Server suppression match, ignore
-            }
-        }
-        // Check user-defined unsubscriptions
-        if (this.unsubscriptions.size === 0) {
-            return false; // No unsubscriptions, allow
-        }
-        
-        for (const pattern of this.unsubscriptions) {
-            if (this._matchPattern(address, pattern)) {
-                return true; // Match found, this message should be ignored
-            }
-        }
-        
-        return false; // No match, allow this message
-    }
-    /**
-     * Match an OSC address against a subscription pattern
-     * Supports wildcard patterns like /avatar/parameters/*
-     * @private
-     */
-    _matchPattern(address: string, pattern: string): boolean {
-        // Exact match
-        if (address === pattern) {
+        // All four source sets are folded into one exact-match Set and one
+        // list of precompiled RegExps. Rebuilding those per message dominated
+        // the cost of this filter, almost entirely in `new RegExp` allocation
+        // for the wildcard patterns.
+        this._ensureMatchers()
+        if (this._exactMatchers.has(address)) {
             return true
         }
-        // Wildcard pattern matching
-        if (pattern.includes('*')) {
-            const regexPattern = pattern
-                .replace(/\//g, '\\/')  // Escape slashes
-                .replace(/\*/g, '.*');  // Convert * to .*
-            const regex = new RegExp(`^${regexPattern}$`)
-            return regex.test(address)
+        for (const regex of this._wildcardMatchers) {
+            if (regex.test(address)) {
+                return true
+            }
         }
         return false
+    }
+    /**
+     * Mark the compiled matcher cache stale. Every mutator of
+     * hardcodedUnsubscriptions / serverBlocklist / serverSuppressions /
+     * unsubscriptions must call this.
+     * @private
+     */
+    _invalidateMatchers(): void {
+        this._matcherDirty = true
+    }
+    /**
+     * Rebuild the exact-match Set and wildcard RegExp list from the four
+     * source sets. Called once per change, not once per message.
+     * @private
+     */
+    _ensureMatchers(): void {
+        if (!this._matcherDirty) {
+            return
+        }
+        const exact = new Set<string>()
+        const wildcards: RegExp[] = []
+        const seen = new Set<string>()
+        const collect = (patterns: Set<string>): void => {
+            for (const pattern of patterns) {
+                if (seen.has(pattern)) {
+                    continue
+                }
+                seen.add(pattern)
+                if (pattern.includes('*')) {
+                    // Same translation the old per-call path used; only the
+                    // exact-equality short-circuit for `*` patterns is dropped.
+                    const regexPattern = pattern.replace(/\//g, '\\/').replace(/\*/g, '.*')
+                    try {
+                        wildcards.push(new RegExp(`^${regexPattern}$`))
+                    } catch (error) {
+                        // A malformed pattern (e.g. server-pushed `/bad/(*`)
+                        // must not poison the whole cache or throw once per
+                        // message. Skip it and keep the rest.
+                        const err = error as Error
+                        console.warn(`[OSCQuery] Ignoring invalid unsubscription pattern "${pattern}": ${err.message}`)
+                    }
+                } else {
+                    exact.add(pattern)
+                }
+            }
+        }
+        collect(this.hardcodedUnsubscriptions)
+        collect(this.serverBlocklist)
+        collect(this.serverSuppressions)
+        collect(this.unsubscriptions)
+        this._exactMatchers = exact
+        this._wildcardMatchers = wildcards
+        this._matcherDirty = false
     }
     /**
      * Find an available port
@@ -1199,6 +1225,7 @@ class OSCQueryService extends EventEmitter {
      */
     addUnsubscription(path: string): void {
         this.unsubscriptions.add(path)
+        this._invalidateMatchers()
         console.log(`[OSCQuery] Added unsubscription: ${path}`)
         this.emit('unsubscription-added', path)
     }
@@ -1213,6 +1240,7 @@ class OSCQueryService extends EventEmitter {
             return false
         }
         this.unsubscriptions.delete(path)
+        this._invalidateMatchers()
         console.log(`[OSCQuery] Removed unsubscription: ${path}`)
         this.emit('unsubscription-removed', path)
         return true
@@ -1234,6 +1262,7 @@ class OSCQueryService extends EventEmitter {
             console.log(`[OSCQuery] Set ${this.unsubscriptions.size} user unsubscription(s):`, Array.from(this.unsubscriptions))
             this.emit('unsubscriptions-updated', Array.from(this.unsubscriptions))
         }
+        this._invalidateMatchers()
     }
     /**
      * Get all current unsubscriptions (includes hardcoded, server-managed, and user-defined)
@@ -1260,6 +1289,7 @@ class OSCQueryService extends EventEmitter {
      */
     clearUnsubscriptions(): void {
         this.unsubscriptions.clear()
+        this._invalidateMatchers()
         console.log('[OSCQuery] Cleared user-defined unsubscriptions - hardcoded unsubscriptions still active')
         this.emit('unsubscriptions-cleared')
     }
@@ -1345,6 +1375,7 @@ class OSCQueryService extends EventEmitter {
         if (Array.isArray(patterns)) {
             patterns.forEach(pattern => this.serverBlocklist.add(pattern))
         }
+        this._invalidateMatchers()
         console.log(`[OSCQuery] Server blocklist updated: ${this.serverBlocklist.size} pattern(s)`)
         this.emit('server-blocklist-updated', Array.from(this.serverBlocklist))
     }
@@ -1378,6 +1409,7 @@ class OSCQueryService extends EventEmitter {
     addServerSuppressions(addresses: string[], metadata?: Record<string, SuppressionMetadata>): void {
         if (Array.isArray(addresses)) {
             addresses.forEach(addr => this.serverSuppressions.add(addr))
+            this._invalidateMatchers()
             // Store per-address metadata if provided
             if (metadata && typeof metadata === 'object') {
                 Object.assign(this.serverSuppressionMetadata, metadata)
@@ -1395,6 +1427,7 @@ class OSCQueryService extends EventEmitter {
                 this.serverSuppressions.delete(addr)
                 delete this.serverSuppressionMetadata[addr]
             })
+            this._invalidateMatchers()
             console.log(`[OSCQuery] Server suppressions removed: ${addresses.length} address(es), remaining: ${this.serverSuppressions.size}`)
             this.emit('server-suppressions-updated', Array.from(this.serverSuppressions))
         }
@@ -1404,6 +1437,7 @@ class OSCQueryService extends EventEmitter {
      */
     clearServerSuppressions(): void {
         this.serverSuppressions.clear()
+        this._invalidateMatchers()
         this.serverSuppressionMetadata = {}
         console.log('[OSCQuery] Server suppressions cleared')
         this.emit('server-suppressions-updated', [])
