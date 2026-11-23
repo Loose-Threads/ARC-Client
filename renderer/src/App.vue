@@ -173,7 +173,8 @@ const routeViewId = computed(() => {
     '/whisper': 'whisper-view',
     '/vrc-timeline': 'vrc-timeline-view',
     '/auto-inviter': 'auto-inviter-view',
-    '/xsoverlay': 'xsoverlay-view'
+    '/xsoverlay': 'xsoverlay-view',
+    '/soundboard': 'soundboard-view'
   }
   return ids[route.path] ?? 'main-view'
 })
@@ -284,6 +285,7 @@ function linksBreakdown(panel: PanelInfo): string {
               <router-link to="/lovense" class="tree-child" :class="{ active: isActive('/lovense') }">Lovense</router-link>
               <router-link to="/openshock" class="tree-child" :class="{ active: isActive('/openshock') }">OpenShock</router-link>
               <router-link to="/oscleash" class="tree-child" :class="{ active: isActive('/oscleash') }">OSC Leash</router-link>
+              <router-link to="/soundboard" class="tree-child" :class="{ active: isActive('/soundboard') }">SoundBoard</router-link>
               <router-link to="/oscgoesbrrr" class="tree-child" :class="{ active: isActive('/oscgoesbrrr') }">OscGoesBrrr</router-link>
               <router-link to="/xsoverlay" class="tree-child" :class="{ active: isActive('/xsoverlay') }">XS Notifications</router-link>
               <router-link to="/vrc-timeline" class="tree-child" :class="{ active: isActive('/vrc-timeline') }">VRC Timeline</router-link>

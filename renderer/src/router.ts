@@ -97,6 +97,11 @@ const router = createRouter({
       path: '/xsoverlay',
       name: 'xsoverlay',
       component: () => import('./pages/XSOverlayPage.vue')
+    },
+    {
+      path: '/soundboard',
+      name: 'soundboard',
+      component: () => import('./pages/SoundBoardPage.vue')
     }
   ]
 })
