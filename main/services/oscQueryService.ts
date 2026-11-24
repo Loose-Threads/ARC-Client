@@ -130,6 +130,10 @@ class OSCQueryService extends EventEmitter {
     _wildcardMatchers: RegExp[]
     serverSuppressionMetadata: SuppressionMetadata
     localOnlyPatterns: Set<string>
+    // Compiled matcher cache for local-only patterns (same glob syntax as
+    // the blocklist). Rebuilt lazily on change, never per message.
+    _localOnlyExact: Set<string>
+    _localOnlyWildcard: RegExp[]
     rootNode: OscQueryNode
     constructor() {
         super()
@@ -191,6 +195,8 @@ class OSCQueryService extends EventEmitter {
         this._wildcardMatchers = []
         // Local-only addresses: received by modules but never forwarded to the server
         this.localOnlyPatterns = new Set()
+        this._localOnlyExact = new Set()
+        this._localOnlyWildcard = []
         // Per-address metadata from server (isPanelParam, isInAvatarJson)
         this.serverSuppressionMetadata = {}
         // Root node for OSC parameter tree
@@ -487,6 +493,25 @@ class OSCQueryService extends EventEmitter {
         collect(this.unsubscriptions)
         this._exactMatchers = exact
         this._wildcardMatchers = wildcards
+        // Local-only patterns use the same glob syntax, compiled into their
+        // own cache so a leash name containing `*` matches correctly.
+        const localExact = new Set<string>()
+        const localWildcards: RegExp[] = []
+        for (const pattern of this.localOnlyPatterns) {
+            if (pattern.includes('*')) {
+                const regexPattern = pattern.replace(/\//g, '\\/').replace(/\*/g, '.*')
+                try {
+                    localWildcards.push(new RegExp(`^${regexPattern}$`))
+                } catch (error) {
+                    const err = error as Error
+                    console.warn(`[OSCQuery] Ignoring invalid local-only pattern "${pattern}": ${err.message}`)
+                }
+            } else {
+                localExact.add(pattern)
+            }
+        }
+        this._localOnlyExact = localExact
+        this._localOnlyWildcard = localWildcards
         this._matcherDirty = false
     }
     /**
@@ -1390,18 +1415,26 @@ class OSCQueryService extends EventEmitter {
      */
     addLocalOnlyAddress(address: string): void {
         this.localOnlyPatterns.add(address)
+        this._invalidateMatchers()
     }
     /**
      * Unregister a local-only address (restores normal forwarding)
      */
     removeLocalOnlyAddress(address: string): void {
         this.localOnlyPatterns.delete(address)
+        this._invalidateMatchers()
     }
     /**
-     * Returns true if the address should be handled locally and not forwarded to the server
+     * Returns true if the address should be handled locally and not forwarded to the server.
+     * Supports the same glob syntax as the blocklist so a leash name containing `*` matches.
      */
     isLocalOnly(address: string): boolean {
-        return this.localOnlyPatterns.has(address)
+        this._ensureMatchers()
+        if (this._localOnlyExact.has(address)) return true
+        for (const regex of this._localOnlyWildcard) {
+            if (regex.test(address)) return true
+        }
+        return false
     }
     /**
      * Add server-managed suppression addresses (from rate monitoring)
