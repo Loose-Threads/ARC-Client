@@ -678,13 +678,19 @@ async function initOscQueryService() {
             : null
           sendToRenderer('vrchat-avatar-change', { id: localAvatarId })
         }
-        // Send to renderer for logging
-        sendToRenderer('osc-received', {
-          address: oscData.address,
-          value: oscData.value,
-          type: oscData.type,
-          connectionId: null
-        })
+        // Local-only addresses (OSCLeash and friends) are received by the
+        // client but never forwarded. Check before the renderer send so a
+        // blocked high-frequency parameter allocates no IPC entry at all.
+        const isLocalOnly = oscQueryService.isLocalOnly(oscData.address)
+        if (!isLocalOnly) {
+          // Send to renderer for logging
+          sendToRenderer('osc-received', {
+            address: oscData.address,
+            value: oscData.value,
+            type: oscData.type,
+            connectionId: null
+          })
+        }
         // Check if WebSocket forwarding is enabled
         const wsForwardingEnabled = serverConfig.appSettings?.enableWebSocketForwarding || false
         if (!wsForwardingEnabled) {
@@ -693,7 +699,7 @@ async function initOscQueryService() {
         // Forward to WebSocket if connected
         if (wsManager && wsManager.isConnected) {
           try {
-            if (oscQueryService.isLocalOnly(oscData.address)) {
+            if (isLocalOnly) {
               return
             }
             wsManager.sendOscData({
