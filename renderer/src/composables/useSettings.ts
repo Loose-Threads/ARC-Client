@@ -207,7 +207,10 @@ export function useSettings() {
             startTime = Date.now()
             updateRuntime()
             if (!runtimeInterval) {
-                runtimeInterval = setInterval(updateRuntime, 1000)
+                // The sidebar shows HH:MM:SS uptime. A 10s tick is visually
+                // indistinguishable from 1s and costs a tenth of the wakeups
+                // for the entire app lifetime.
+                runtimeInterval = setInterval(updateRuntime, 10000)
             }
             debugLog('Application initialized')
             settingsInitialized = true
