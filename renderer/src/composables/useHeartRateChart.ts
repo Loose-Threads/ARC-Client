@@ -58,7 +58,6 @@ export function useHeartRateChart() {
   const customFromInput = ref('')
   const customToInput = ref('')
   let pollTimer: ReturnType<typeof setInterval> | null = null
-  let liveTimer: ReturnType<typeof setInterval> | null = null
   let fetchDebounceTimer: ReturnType<typeof setTimeout> | null = null
   let fetchSeq = 0
   const timeRange = computed<TimeRange>(() => {
@@ -209,11 +208,16 @@ export function useHeartRateChart() {
     }
     setCustomRange(newFrom, newTo)
   }
+  // One timer, not two. The interval depends on isLive: 2s while live,
+  // 5s otherwise. Previously both timers ran and each guarded on isLive,
+  // so one was always waking up to do nothing.
+  const LIVE_INTERVAL_MS = 2000
+  const IDLE_INTERVAL_MS = 5000
   function startPolling() {
     stopPolling()
     pollTimer = setInterval(() => {
-      if (!isLive.value) void fetchData()
-    }, 5000)
+      void fetchData()
+    }, isLive.value ? LIVE_INTERVAL_MS : IDLE_INTERVAL_MS)
   }
   function stopPolling() {
     if (pollTimer) {
@@ -225,35 +229,17 @@ export function useHeartRateChart() {
       fetchDebounceTimer = null
     }
   }
-  function startLiveTimer() {
-    stopLiveTimer()
-    liveTimer = setInterval(() => {
-      if (isLive.value) void fetchData()
-    }, 2000)
-  }
-  function stopLiveTimer() {
-    if (liveTimer) {
-      clearInterval(liveTimer)
-      liveTimer = null
-    }
-  }
-  watch(isLive, (live) => {
-    if (live) {
-      startLiveTimer()
-    } else {
-      stopLiveTimer()
-    }
+  watch(isLive, () => {
+    startPolling()
   })
   onMounted(() => {
     void fetchHistoryConfig()
     void fetchCaptureRate()
     fetchDataNow()
-    startLiveTimer()
     startPolling()
   })
   onUnmounted(() => {
     stopPolling()
-    stopLiveTimer()
   })
   return {
     chartData,
