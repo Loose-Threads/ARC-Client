@@ -426,7 +426,7 @@ function linksBreakdown(panel: PanelInfo): string {
     </div>
   </div>
 
-  <div class="snow-overlay" :class="{ hidden: !snowEnabled }">
+  <div v-if="snowEnabled" class="snow-overlay">
     <div v-for="index in 50" :key="index" class="snow"></div>
   </div>
 

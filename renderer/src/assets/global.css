@@ -1990,15 +1990,19 @@ body {
     top: 0;
     left: 0;
     overflow: hidden;
-    filter: drop-shadow(0 0 10px white);
     pointer-events: none;
     z-index: 10000;
     opacity: 1;
     transition: opacity 0.5s ease;
 }
 
+/* visibility:hidden is what actually stops the work. opacity:0 alone left
+   all 50 elements laid out, composited and animating forever, and the
+   drop-shadow filter on the parent forced the whole subtree to re-raster
+   every frame. */
 .snow-overlay.hidden {
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
 }
 
@@ -2008,6 +2012,10 @@ body {
     height: 10px;
     background: white;
     border-radius: 50%;
+    /* Per-element rather than on the parent: a filter on an ancestor
+       re-rasterizes the entire subtree whenever anything inside changes,
+       which with 50 running animations is every frame. */
+    filter: drop-shadow(0 0 10px white);
 }
 
 .snow:nth-child(1) { opacity: 0.8533; transform: translate(45.9571vw, -10px) scale(0.3412); animation: fall-1 18s -22s linear infinite; }
