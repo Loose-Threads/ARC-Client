@@ -218,8 +218,13 @@ export function useOscLeash() {
     await refreshAutostart()
   }
 
+  // Status arrives via the oscleash-status-update push. A slow safety
+  // refresh covers the case where the main process changes state without
+  // emitting (e.g. an addon crash). The old 400ms poll was 2.5 IPC
+  // round-trips per second for data that was already being pushed.
+  const SAFETY_REFRESH_MS = 10000
   function startPolling() {
-    pollTimer = setInterval(refreshStatus, 400)
+    pollTimer = setInterval(refreshStatus, SAFETY_REFRESH_MS)
   }
   function stopPolling() {
     if (pollTimer) {

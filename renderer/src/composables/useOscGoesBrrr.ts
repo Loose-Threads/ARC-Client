@@ -113,8 +113,11 @@ export function useOscGoesBrrr() {
     return result
   }
 
+  // Status arrives via the ogb-status-update push; this is a slow safety
+  // refresh only.
+  const SAFETY_REFRESH_MS = 10000
   function startPolling() {
-    pollTimer = setInterval(refreshStatus, 1000)
+    pollTimer = setInterval(refreshStatus, SAFETY_REFRESH_MS)
   }
   function stopPolling() {
     if (pollTimer) {

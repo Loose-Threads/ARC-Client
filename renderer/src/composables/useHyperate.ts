@@ -106,11 +106,14 @@ export function useHyperate() {
     await refreshTrackers()
   }
 
+  // Status and per-tracker heart rate arrive via the hyperate-update push;
+  // this is a slow safety refresh only.
+  const SAFETY_REFRESH_MS = 10000
   function startPolling() {
     pollTimer = setInterval(async () => {
       await refreshStatus()
       await refreshTrackers()
-    }, 2000)
+    }, SAFETY_REFRESH_MS)
   }
   function stopPolling() {
     if (pollTimer) {

@@ -82,9 +82,12 @@ export function useXSOverlay() {
     await api.xsOverlayUpdateConfig(newConfig)
     await refreshStatus()
   }
+  // Status arrives via the xsoverlay-status push; this is a slow safety
+  // refresh only.
+  const SAFETY_REFRESH_MS = 10000
   function startPolling() {
     stopPolling()
-    pollTimer = setInterval(refreshStatus, 3000)
+    pollTimer = setInterval(refreshStatus, SAFETY_REFRESH_MS)
   }
   function stopPolling() {
     if (pollTimer) {
