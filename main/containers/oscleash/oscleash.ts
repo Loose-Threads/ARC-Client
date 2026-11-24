@@ -536,6 +536,7 @@ class OSCLeashAddon {
   onStatusChange: ((status: unknown) => void) | null
   onMovementUpdate: ((data: unknown) => void) | null
   _localOnlyAddresses: string[]
+  _localOnlyOwner: EventEmitter | null
   constructor() {
     this.enabled = false
     this.oscQuery = null
@@ -549,6 +550,7 @@ class OSCLeashAddon {
     this.onStatusChange = null // Callback for status changes
     this.onMovementUpdate = null // Callback for movement updates
     this._localOnlyAddresses = []
+    this._localOnlyOwner = null
     
     debug.info('OSCLeash addon initialized')
   }
@@ -667,6 +669,9 @@ class OSCLeashAddon {
 
       // Register all leash addresses as local-only so they are never forwarded to the server
       this._localOnlyAddresses = this._buildLocalOnlyAddresses()
+      // Capture the instance we registered against so stop() unregisters
+      // from the same object even if this.oscQuery was replaced since.
+      this._localOnlyOwner = this.oscQuery
       for (const addr of this._localOnlyAddresses) {
         (this.oscQuery as any).addLocalOnlyAddress?.(addr)
       }
@@ -722,10 +727,12 @@ class OSCLeashAddon {
     }
 
     // Unregister local-only addresses so forwarding resumes if the addon is restarted
+    const localOnlyOwner = this._localOnlyOwner ?? this.oscQuery
     for (const addr of this._localOnlyAddresses) {
-      (this.oscQuery as any).removeLocalOnlyAddress?.(addr)
+      (localOnlyOwner as any)?.removeLocalOnlyAddress?.(addr)
     }
     this._localOnlyAddresses = []
+    this._localOnlyOwner = null
 
     this.program = null
     this.leashes = []
