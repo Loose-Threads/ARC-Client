@@ -1,4 +1,4 @@
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useElectronAPI } from './useElectronAPI'
 
 export interface LogEntry {
@@ -14,19 +14,20 @@ const MAX_ENTRIES = 2000
 const FLOAT_THROTTLE_INTERVAL = 750
 const MAX_FLOAT_TRACK = 1500
 
-// Module-level state — persists across navigation, never torn down
+// Module-level state — persists across navigation while a consumer is mounted.
+// Collection is demand-driven: the OSC streams are only acquired from the main
+// process while at least one component is using this composable.
 const receivedLogs = ref<LogEntry[]>([])
 const forwardedLogs = ref<LogEntry[]>([])
 const arcReceivedLogs = ref<LogEntry[]>([])
-const isVisible = ref(false)
 let buffer: { type: string; address: string; value: any; connectionId?: string | null; timestamp: number }[] = []
 let lastFlush = 0
 let flushTimer: ReturnType<typeof setInterval> | null = null
 const lastFloatLogTimes = new Map<string, number>()
 const lastFloatValues = new Map<string, any>()
 const pendingFloatTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
-let oscLogsInitialized = false
-let oscLogsInitPromise: Promise<void> | null = null
+let unsubscribers: Array<() => void> = []
+let consumerCount = 0
 
 export function useOscLogs() {
   const api = useElectronAPI()
@@ -52,8 +53,16 @@ export function useOscLogs() {
       const pruneCount = Math.floor(MAX_FLOAT_TRACK * 0.1)
       const sorted = [...lastFloatLogTimes.entries()].sort((a, b) => a[1] - b[1])
       for (let i = 0; i < pruneCount; i++) {
-        lastFloatLogTimes.delete(sorted[i][0])
-        lastFloatValues.delete(sorted[i][0])
+        const staleKey = sorted[i][0]
+        lastFloatLogTimes.delete(staleKey)
+        lastFloatValues.delete(staleKey)
+        // The timeout map must be pruned alongside the timestamp map,
+        // otherwise it grows without bound for the life of the process.
+        const staleTimeout = pendingFloatTimeouts.get(staleKey)
+        if (staleTimeout) {
+          clearTimeout(staleTimeout)
+          pendingFloatTimeouts.delete(staleKey)
+        }
       }
     }
     const existing = pendingFloatTimeouts.get(key)
@@ -122,28 +131,41 @@ export function useOscLogs() {
     pendingFloatTimeouts.clear()
   }
 
-  async function initialize() {
-    if (oscLogsInitialized) return
-    if (oscLogsInitPromise) return oscLogsInitPromise
-    oscLogsInitPromise = Promise.resolve().then(() => {
-      api.onOscReceived(handleOscReceived)
-      api.onOscForwarded(handleOscForwarded)
-      api.onOscReceivedBatch((batch: any[]) => { for (const d of batch) handleOscReceived(d) })
-      api.onOscForwardedBatch((batch: any[]) => { for (const d of batch) handleOscForwarded(d) })
-      api.onWebSocketOscData(handleArcReceived)
+  function startCollection() {
+    if (consumerCount === 0) {
+      unsubscribers = [
+        api.onOscReceived(handleOscReceived),
+        api.onOscForwarded(handleOscForwarded),
+        api.onOscReceivedBatch((batch: any[]) => { for (const d of batch) handleOscReceived(d) }),
+        api.onOscForwardedBatch((batch: any[]) => { for (const d of batch) handleOscForwarded(d) }),
+        api.onWebSocketOscData(handleArcReceived)
+      ]
       flushTimer = setInterval(() => { if (buffer.length > 0) flushBuffer() }, FLUSH_INTERVAL)
-      oscLogsInitialized = true
-    })
-    return oscLogsInitPromise
+    }
+    consumerCount++
   }
 
-  onMounted(() => { void initialize() })
+  function stopCollection() {
+    consumerCount = Math.max(0, consumerCount - 1)
+    if (consumerCount > 0) return
+    for (const unsubscribe of unsubscribers) unsubscribe()
+    unsubscribers = []
+    if (flushTimer) {
+      clearInterval(flushTimer)
+      flushTimer = null
+    }
+    buffer = []
+    pendingFloatTimeouts.forEach(t => clearTimeout(t))
+    pendingFloatTimeouts.clear()
+  }
+
+  onMounted(startCollection)
+  onUnmounted(stopCollection)
 
   return {
     receivedLogs,
     forwardedLogs,
     arcReceivedLogs,
-    isVisible,
     clearReceived,
     clearForwarded,
     clearArcReceived,

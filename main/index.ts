@@ -761,11 +761,16 @@ function initOscClient() {
   console.log(`OSC Client targeting ${serverConfig.targetOscAddress}:${serverConfig.targetOscPort}`)
   debug.logOscClientInit(serverConfig.targetOscAddress, serverConfig.targetOscPort)
 }
-// OSC IPC batching: accumulate high-frequency messages and flush at 10Hz
+// OSC IPC batching: accumulate high-frequency messages and flush at 10Hz.
+// Collection is demand-driven — the renderer acquires a stream before any
+// message is buffered, so with no consumer the main process does no work
+// per OSC message beyond the Set lookup.
 const oscIpcBatch = {
   received: new Map<string, any>(),
   forwarded: new Map<string, any>()
 }
+type OscStreamId = 'osc-received' | 'osc-forwarded' | 'websocket-osc-data'
+const acquiredStreams = new Set<OscStreamId>()
 function setupOscIpcBatching() {
   if ((global as any).oscIpcBatchInterval) {
     clearInterval((global as any).oscIpcBatchInterval)
@@ -798,17 +803,35 @@ function sendToRendererDirect(channel: string, data: any) {
   }
 }
 function sendToRenderer(channel: string, data: any) {
-  // Batch high-frequency OSC channels to reduce IPC pressure on renderer
+  // Batch high-frequency OSC channels to reduce IPC pressure on renderer.
+  // Drop the message entirely when no renderer has acquired the stream —
+  // this is the check that keeps a closed Logs page from costing anything.
   if (channel === 'osc-received') {
+    if (!acquiredStreams.has('osc-received')) return
     oscIpcBatch.received.set(data.address, data)
     return
   }
   if (channel === 'osc-forwarded') {
+    if (!acquiredStreams.has('osc-forwarded')) return
     oscIpcBatch.forwarded.set(data.address, data)
     return
   }
+  if (channel === 'websocket-osc-data') {
+    if (!acquiredStreams.has('websocket-osc-data')) return
+  }
   sendToRendererDirect(channel, data)
 }
+ipcMain.on('osc-stream:acquire', (_event, stream: OscStreamId) => {
+  if (stream === 'osc-received' || stream === 'osc-forwarded' || stream === 'websocket-osc-data') {
+    acquiredStreams.add(stream)
+  }
+})
+ipcMain.on('osc-stream:release', (_event, stream: OscStreamId) => {
+  acquiredStreams.delete(stream)
+  // Drop anything buffered for a stream nobody is listening to any more.
+  if (stream === 'osc-received') oscIpcBatch.received.clear()
+  if (stream === 'osc-forwarded') oscIpcBatch.forwarded.clear()
+})
 // ────────── IPC Handlers ──────────
 ipcMain.handle('get-config', () => {
   return configManager.getConfig()

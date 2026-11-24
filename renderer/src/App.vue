@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import { useOscStatus } from './composables/useOscStatus'
 import { useServerConnection, type PanelInfo } from './composables/useServerConnection'
 import { useSettings } from './composables/useSettings'
-import { useOscLogs } from './composables/useOscLogs'
 import { useVRChatAPI } from './composables/useVRChatAPI'
 import CrashReportModal from './components/CrashReportModal.vue'
 
@@ -47,7 +46,6 @@ const {
   toggleWsForwarding
 } = useServerConnection()
 
-useOscLogs()
 useVRChatAPI()
 
 // ── Notice banner toast system ──────────────────────────────────
