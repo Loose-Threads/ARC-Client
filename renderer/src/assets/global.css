@@ -90,8 +90,9 @@ body {
     display: flex;
     height: 100vh;
     background: var(--main-bg);
-    backdrop-filter: blur(var(--backdrop-blur));
-    -webkit-backdrop-filter: blur(var(--backdrop-blur));
+    /* No backdrop-filter here. --backdrop-blur is 0px in every theme, so it
+       was a no-op visually while still forcing the whole app into a
+       compositing layer with a backdrop root. */
     transition: background var(--transition-base);
 }
 
@@ -2012,10 +2013,12 @@ body {
     height: 10px;
     background: white;
     border-radius: 50%;
-    /* Per-element rather than on the parent: a filter on an ancestor
-       re-rasterizes the entire subtree whenever anything inside changes,
-       which with 50 running animations is every frame. */
-    filter: drop-shadow(0 0 10px white);
+    /* The glow is a static box-shadow, not a filter. A drop-shadow filter
+       on each of 50 animated elements means 50 filter passes per frame;
+       box-shadow is painted once and then only the transform animates.
+       No will-change: promoting 50 elements to permanent compositor layers
+       costs more in GPU memory and compositing than it saves. */
+    box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.85);
 }
 
 .snow:nth-child(1) { opacity: 0.8533; transform: translate(45.9571vw, -10px) scale(0.3412); animation: fall-1 18s -22s linear infinite; }
