@@ -95,15 +95,18 @@ export function useXSOverlay() {
       pollTimer = null
     }
   }
+  let unsubStatus: (() => void) | null = null
+  let unsubNotification: (() => void) | null = null
+
   onMounted(() => {
     refreshStatus()
     refreshAutostart()
     refreshDbLogs()
     startPolling()
-    api.onXsOverlayStatus((data: any) => {
+    unsubStatus = api.onXsOverlayStatus((data: any) => {
       status.value = { ...defaultStatus, ...data }
     })
-    api.onXsOverlayNotification((entry: XSOverlayNotificationLogEntry) => {
+    unsubNotification = api.onXsOverlayNotification((entry: XSOverlayNotificationLogEntry) => {
       const existing = status.value.notificationLog
       status.value = {
         ...status.value,
@@ -114,8 +117,10 @@ export function useXSOverlay() {
   })
   onUnmounted(() => {
     stopPolling()
-    api.removeAllListeners('xsoverlay-status')
-    api.removeAllListeners('xsoverlay-notification')
+    unsubStatus?.()
+    unsubNotification?.()
+    unsubStatus = null
+    unsubNotification = null
   })
   return {
     status,

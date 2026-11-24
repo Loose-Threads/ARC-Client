@@ -113,14 +113,17 @@ export function useAutoStatus() {
     settings.value = { ...settings.value, ...updates }
   }
 
+  let unsubUpdate: (() => void) | null = null
+
   onMounted(() => {
     refresh()
-    api.onAutoStatusUpdate((data: any) => {
+    unsubUpdate = api.onAutoStatusUpdate((data: any) => {
       status.value = { ...status.value, ...data }
     })
   })
   onUnmounted(() => {
-    api.removeAllListeners('autostatus-update')
+    unsubUpdate?.()
+    unsubUpdate = null
   })
 
   return {

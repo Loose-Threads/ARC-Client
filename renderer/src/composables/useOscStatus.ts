@@ -1,4 +1,4 @@
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useElectronAPI } from './useElectronAPI'
 import { debugLog } from './useDebugLog'
 
@@ -241,6 +241,7 @@ export function useOscStatus() {
       oscEnabled.value = false
     }
   }
+  let unsubscribers: Array<() => void> = []
   async function initialize() {
     if (oscStatusInitialized) return
     if (oscStatusInitPromise) return oscStatusInitPromise
@@ -250,29 +251,31 @@ export function useOscStatus() {
       await loadBlockedParams()
       const status = await api.getOscStatus()
       applyOscStatus(status)
-      api.onOscServerStatus(handleOscServerStatus)
-      api.onOscQueryStatus((data: any) => {
-        if (data.status === 'started') {
-          queryRunning.value = true
-          queryRestarting.value = false
-          debugLog(`OSC-Query service started on HTTP port ${data.httpPort}`)
-          loadUnsubscriptions()
-        } else if (data.status === 'restarting') {
-          queryRunning.value = false
-          queryRestarting.value = true
-          debugLog('OSC-Query service restarting...')
-        } else if (data.status === 'error') {
-          queryRestarting.value = false
-          debugLog(`OSC-Query service error: ${data.error}`, 'error')
-        } else if (data.status === 'stopped') {
-          queryRunning.value = false
-          queryRestarting.value = false
-          debugLog('OSC-Query service stopped')
-        }
-      })
-      api.onParameterBlocklistUpdated(() => loadBlockedParams())
-      api.onParametersSuppressed(() => loadBlockedParams())
-      api.onParametersUnsuppressed(() => loadBlockedParams())
+      unsubscribers = [
+        api.onOscServerStatus(handleOscServerStatus),
+        api.onOscQueryStatus((data: any) => {
+          if (data.status === 'started') {
+            queryRunning.value = true
+            queryRestarting.value = false
+            debugLog(`OSC-Query service started on HTTP port ${data.httpPort}`)
+            loadUnsubscriptions()
+          } else if (data.status === 'restarting') {
+            queryRunning.value = false
+            queryRestarting.value = true
+            debugLog('OSC-Query service restarting...')
+          } else if (data.status === 'error') {
+            queryRestarting.value = false
+            debugLog(`OSC-Query service error: ${data.error}`, 'error')
+          } else if (data.status === 'stopped') {
+            queryRunning.value = false
+            queryRestarting.value = false
+            debugLog('OSC-Query service stopped')
+          }
+        }),
+        api.onParameterBlocklistUpdated(() => loadBlockedParams()),
+        api.onParametersSuppressed(() => loadBlockedParams()),
+        api.onParametersUnsuppressed(() => loadBlockedParams())
+      ]
       oscStatusInitialized = true
     })()
     await oscStatusInitPromise
@@ -280,6 +283,15 @@ export function useOscStatus() {
 
   onMounted(async () => {
     await initialize()
+  })
+
+  onUnmounted(() => {
+    for (const unsubscribe of unsubscribers) unsubscribe()
+    unsubscribers = []
+    if (cooldownInterval) {
+      clearInterval(cooldownInterval)
+      cooldownInterval = null
+    }
   })
 
   return {

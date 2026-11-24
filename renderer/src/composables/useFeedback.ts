@@ -117,15 +117,18 @@ export function useFeedback() {
     }
   }
 
+  let unsubUpdate: (() => void) | null = null
+
   onMounted(async () => {
     const ver = await api.getClientVersion()
     if (ver) clientVersion.value = ver
     await refreshList()
     await refreshStats()
-    api.onFeedbackUpdate(handleFeedbackUpdate)
+    unsubUpdate = api.onFeedbackUpdate(handleFeedbackUpdate)
   })
   onUnmounted(() => {
-    api.removeAllListeners('feedback-update')
+    unsubUpdate?.()
+    unsubUpdate = null
   })
 
   return {

@@ -122,12 +122,14 @@ export function useHyperate() {
     }
   }
 
+  let unsubUpdate: (() => void) | null = null
+
   onMounted(() => {
     refreshStatus()
     refreshTrackers()
     refreshAutostart()
     startPolling()
-    api.onHyperateUpdate((data: any) => {
+    unsubUpdate = api.onHyperateUpdate((data: any) => {
       if (data.type === 'status') {
         status.value = { ...defaultStatus, ...data }
         heartRate.value = data.lastHeartRate ?? heartRate.value
@@ -154,7 +156,8 @@ export function useHyperate() {
   })
   onUnmounted(() => {
     stopPolling()
-    api.removeAllListeners('hyperate-update')
+    unsubUpdate?.()
+    unsubUpdate = null
   })
 
   return {

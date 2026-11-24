@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useElectronAPI } from './useElectronAPI'
 import { onWhisperLevel, listInputDevices } from '../services/whisperCapture'
 
@@ -118,7 +118,6 @@ const collapsedIds = ref<Set<string>>(new Set())
 const lastSavedAt = ref<number>(0)
 const dirtyCommandIds = ref<Set<string>>(new Set())
 const savingCommandIds = ref<Set<string>>(new Set())
-let listenersRegistered = false
 
 function safeReadStorage(key: string): string | null {
   try { return localStorage.getItem(key) } catch { return null }
@@ -145,8 +144,7 @@ function ensureCollapsedOnFirstLoad(list: WhisperCommand[]): void {
   safeWriteStorage(COLLAPSE_INITIALIZED_KEY, '1')
 }
 
-function registerListeners() {
-  if (listenersRegistered) return
+function registerListeners(): Array<() => void> {
   const api = useElectronAPI()
   // Only mark registered AFTER the bridge is reachable and listeners
   // are actually attached. Previously the flag was set before the
@@ -155,7 +153,8 @@ function registerListeners() {
   // from the main process was silently dropped, leaving the UI stuck
   // on whatever status was last pulled. Navigating away/back masked it
   // because WhisperPage's onMounted calls refreshStatus() again.
-  api.onWhisperUpdate((data: any) => {
+  const unsubscribers: Array<() => void> = []
+  unsubscribers.push(api.onWhisperUpdate((data: any) => {
     if (data.type === 'status') {
       const { type: _type, ...rest } = data
       status.value = { ...defaultStatus, ...rest }
@@ -202,11 +201,11 @@ function registerListeners() {
         }, 1500)
       }
     }
-  })
-  onWhisperLevel((level: number) => {
+  }))
+  unsubscribers.push(onWhisperLevel((level: number) => {
     inputLevel.value = level
-  })
-  listenersRegistered = true
+  }))
+  return unsubscribers
 }
 
 async function refreshStatus() {
@@ -296,7 +295,10 @@ export function normalizeCommand(command: WhisperCommand): WhisperCommand {
 
 export function useWhisper() {
   const api = useElectronAPI()
-  registerListeners()
+  const unsubscribers = registerListeners()
+  onUnmounted(() => {
+    for (const unsubscribe of unsubscribers) unsubscribe()
+  })
   collapsedIds.value = loadCollapsedIds()
 
   const gateOpen = computed(() =>

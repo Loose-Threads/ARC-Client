@@ -1,4 +1,4 @@
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useElectronAPI } from './useElectronAPI'
 
 export interface VRChatUser {
@@ -193,6 +193,7 @@ export function useVRChatAPI() {
     }
   }
 
+  let unsubscribers: Array<() => void> = []
   async function initialize() {
     if (vrchatApiInitialized) return
     if (vrchatApiInitPromise) return vrchatApiInitPromise
@@ -206,7 +207,7 @@ export function useVRChatAPI() {
         await checkLinkStatus()
       }
       if (!vrchatApiPipelineListenerRegistered) {
-        api.onVRChatPipelineEvent(async () => {
+        unsubscribers.push(api.onVRChatPipelineEvent(async () => {
           await loadStatus()
           if (status.value.authenticated) {
             await loadStats()
@@ -215,11 +216,11 @@ export function useVRChatAPI() {
             stats.value = null
             linkStatus.value = 'unknown'
           }
-        })
+        }))
         vrchatApiPipelineListenerRegistered = true
       }
       if (!vrchatApiWebSocketListenerRegistered) {
-        api.onWebSocketStatus((data: any) => {
+        unsubscribers.push(api.onWebSocketStatus((data: any) => {
           const nextConnected = (data.status ?? (data.connected ? 'connected' : 'disconnected')) === 'connected'
           websocketConnected.value = nextConnected
           if (!nextConnected) {
@@ -229,7 +230,7 @@ export function useVRChatAPI() {
           if (status.value.authenticated) {
             void checkLinkStatus()
           }
-        })
+        }))
         vrchatApiWebSocketListenerRegistered = true
       }
       vrchatApiInitialized = true
@@ -238,6 +239,13 @@ export function useVRChatAPI() {
   }
 
   onMounted(() => { void initialize() })
+
+  onUnmounted(() => {
+    for (const unsubscribe of unsubscribers) unsubscribe()
+    unsubscribers = []
+    vrchatApiPipelineListenerRegistered = false
+    vrchatApiWebSocketListenerRegistered = false
+  })
 
   return {
     status,

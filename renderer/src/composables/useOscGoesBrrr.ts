@@ -126,17 +126,20 @@ export function useOscGoesBrrr() {
     }
   }
 
+  let unsubStatus: (() => void) | null = null
+
   onMounted(() => {
     refreshStatus()
     refreshAutostart()
     startPolling()
-    api.onOgbStatusUpdate((data: any) => {
+    unsubStatus = api.onOgbStatusUpdate((data: any) => {
       status.value = { ...defaultStatus, ...data }
     })
   })
   onUnmounted(() => {
     stopPolling()
-    api.removeAllListeners('ogb-status-update')
+    unsubStatus?.()
+    unsubStatus = null
   })
 
   return {

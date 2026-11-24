@@ -1,4 +1,4 @@
-import { ref, shallowRef, triggerRef, onMounted } from 'vue'
+import { ref, shallowRef, triggerRef, onMounted, onUnmounted } from 'vue'
 import { useElectronAPI } from './useElectronAPI'
 import { debugLog } from './useDebugLog'
 
@@ -200,14 +200,22 @@ export function useServerConnection() {
     await serverConnectionInitPromise
   }
 
+  let unsubscribers: Array<() => void> = []
   onMounted(async () => {
     await initialize()
-    api.onVrchatAvatarChange((data: any) => {
-      localAvatarId.value = typeof data?.id === 'string' && data.id.length > 0 ? data.id : null
-    })
-    api.onWebSocketAvatarStateConfirmed((data: any) => {
-      confirmedAvatarId.value = typeof data?.id === 'string' && data.id.length > 0 ? data.id : null
-    })
+    unsubscribers = [
+      api.onVrchatAvatarChange((data: any) => {
+        localAvatarId.value = typeof data?.id === 'string' && data.id.length > 0 ? data.id : null
+      }),
+      api.onWebSocketAvatarStateConfirmed((data: any) => {
+        confirmedAvatarId.value = typeof data?.id === 'string' && data.id.length > 0 ? data.id : null
+      })
+    ]
+  })
+
+  onUnmounted(() => {
+    for (const unsubscribe of unsubscribers) unsubscribe()
+    unsubscribers = []
   })
 
   const pendingPanelToggles = ref<Set<string>>(new Set())

@@ -233,25 +233,30 @@ export function useOscLeash() {
     }
   }
 
+  let unsubMovement: (() => void) | null = null
+  let unsubStatus: (() => void) | null = null
+
   onMounted(() => {
     refreshStatus()
     loadConfig()
     refreshAutostart()
     startPolling()
-    api.onOSCLeashMovement((data: any) => {
+    unsubMovement = api.onOSCLeashMovement((data: any) => {
       movement.value = { vertical: data.vertical ?? 0, horizontal: data.horizontal ?? 0, run: data.run ?? false }
       if (data.physbone) {
         physbone.value = { ...physbone.value, ...data.physbone }
       }
     })
-    api.onOSCLeashStatusUpdate((data: any) => {
+    unsubStatus = api.onOSCLeashStatusUpdate((data: any) => {
       status.value = { ...status.value, ...data }
     })
   })
   onUnmounted(() => {
     stopPolling()
-    api.removeAllListeners('oscleash-movement-data')
-    api.removeAllListeners('oscleash-status-update')
+    unsubMovement?.()
+    unsubStatus?.()
+    unsubMovement = null
+    unsubStatus = null
   })
 
   return {
