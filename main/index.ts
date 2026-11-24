@@ -2651,11 +2651,16 @@ function setupMemoryManagement() {
   if ((global as any).memoryManagementInterval) {
     clearInterval((global as any).memoryManagementInterval)
   }
+  // A forced full GC is a stop-the-world pause. Running one on a timer
+  // regardless of pressure caused the stutter it was meant to prevent, so
+  // this only reports by default and forces a collection when the heap
+  // actually crosses the high threshold — at most once per minute.
+  const HIGH_HEAP_BYTES = 120 * 1024 * 1024
+  const WARN_HEAP_BYTES = 80 * 1024 * 1024
+  const MIN_FORCED_GC_INTERVAL_MS = 60000
+  let lastForcedGcAt = 0
   ;(global as any).memoryManagementInterval = setInterval(() => {
     try {
-      if ((global as any).gc) {
-        ;(global as any).gc()
-      }
       const memoryUsage = process.memoryUsage()
       const memoryMB = {
         rss: Math.round(memoryUsage.rss / 1024 / 1024),
@@ -2663,14 +2668,14 @@ function setupMemoryManagement() {
         heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
         external: Math.round(memoryUsage.external / 1024 / 1024)
       }
-      if (memoryUsage.heapUsed > 80 * 1024 * 1024) {
+      if (memoryUsage.heapUsed > WARN_HEAP_BYTES) {
         debug.warn(`High memory usage detected: ${JSON.stringify(memoryMB)}`)
-        if (memoryUsage.heapUsed > 120 * 1024 * 1024) {
-          debug.warn('Very high memory usage - forcing aggressive cleanup')
-          if ((global as any).gc) {
+        if (memoryUsage.heapUsed > HIGH_HEAP_BYTES) {
+          const now = Date.now()
+          if ((global as any).gc && now - lastForcedGcAt >= MIN_FORCED_GC_INTERVAL_MS) {
+            lastForcedGcAt = now
+            debug.warn('Very high memory usage - forcing a collection')
             ;(global as any).gc()
-            setTimeout(() => (global as any).gc && (global as any).gc(), 100)
-            setTimeout(() => (global as any).gc && (global as any).gc(), 200)
           }
         }
       }
