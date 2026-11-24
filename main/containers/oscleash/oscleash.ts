@@ -191,7 +191,8 @@ class OSCPackageController {
   oscQuery: EventEmitter | null
   oscService: OscService | null
   addonInstance: OSCLeashAddon | null
-  listeners: Map<string, (oscData: OscMessageData) => void>
+  listeners: Map<string, (value: number) => void>
+  dispatchHandler: ((oscData: OscMessageData) => void) | null
   onLeashActivate: ((leash: Leash) => void) | null
   onLeashDeactivate: ((leash: Leash) => void) | null
   constructor(leashCollection: Leash[], oscQuery: EventEmitter | null, oscService: OscService | null, addonInstance: OSCLeashAddon | null = null) {
@@ -202,7 +203,8 @@ class OSCPackageController {
     this.oscQuery = oscQuery
     this.oscService = oscService
     this.addonInstance = addonInstance
-    this.listeners = new Map<string, (oscData: OscMessageData) => void>()
+    this.listeners = new Map<string, (value: number) => void>()
+    this.dispatchHandler = null
     this.onLeashActivate = null
     this.onLeashDeactivate = null
   }
@@ -255,23 +257,27 @@ class OSCPackageController {
     })
   }
   registerListener(address: string, callback: (value: number) => void): void {
-    if (this.oscQuery) {
-      // Create a wrapper callback that filters OSC-Query messages by address
-      const wrappedCallback = (oscData: OscMessageData) => {
+    if (!this.oscQuery) return
+    // One handler per address, dispatched from a single 'osc-message'
+    // listener. Attaching a listener per address meant every OSC message
+    // VRChat emitted (including face tracking at 100+ Hz) ran all of them
+    // through a string compare that almost always failed.
+    this.listeners.set(address, callback)
+    if (!this.dispatchHandler) {
+      this.dispatchHandler = (oscData: OscMessageData) => {
+        const handler = this.listeners.get(oscData.address)
+        if (!handler) return
         try {
-          if (oscData.address === address) {
-            callback(oscData.value)
-          }
+          handler(oscData.value)
         } catch (error) {
-          debug.error(`Error in OSCLeash listener for ${address}: ${(error as Error).message}`, {
-            address,
+          debug.error(`Error in OSCLeash listener for ${oscData.address}: ${(error as Error).message}`, {
+            address: oscData.address,
             value: oscData?.value,
             stack: (error as Error).stack
           })
         }
       }
-      this.oscQuery.on('osc-message', wrappedCallback)
-      this.listeners.set(address, wrappedCallback)
+      this.oscQuery.on('osc-message', this.dispatchHandler)
     }
   }
   updateGrabbed(currLeash: Leash, value: unknown): void {
@@ -308,11 +314,10 @@ class OSCPackageController {
     }
   }
   removeAllListeners(): void {
-    if (this.oscQuery) {
-      for (const [address, callback] of this.listeners) {
-        this.oscQuery.off('osc-message', callback)
-      }
+    if (this.oscQuery && this.dispatchHandler) {
+      this.oscQuery.off('osc-message', this.dispatchHandler)
     }
+    this.dispatchHandler = null
     this.listeners.clear()
   }
 }

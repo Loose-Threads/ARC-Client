@@ -43,7 +43,6 @@ class OscService extends EventEmitter {
   targetPort: number
   targetAddress: string
   additionalConnections: AdditionalConnection[]
-  oscLeashListeners: Map<string, (value: unknown) => void>
 
   constructor() {
     super()
@@ -54,7 +53,6 @@ class OscService extends EventEmitter {
     this.targetPort = 9000
     this.targetAddress = '127.0.0.1'
     this.additionalConnections = []
-    this.oscLeashListeners = new Map()
   }
   initialize(localPort: number | null = null, targetPort = 9000, targetAddress = '127.0.0.1'): boolean {
     this.targetPort = targetPort
@@ -94,24 +92,6 @@ class OscService extends EventEmitter {
         targetPort: this.targetPort,
         targetAddress: this.targetAddress
       })
-    })
-    this.primaryUdpPort!.on("message", (oscMessage: OscMessage) => {
-      if (this.oscLeashListeners.size > 0) {
-        const address = oscMessage.address
-        const callback = this.oscLeashListeners.get(address)
-        if (callback) {
-          try {
-            const value = oscMessage.args && oscMessage.args.length > 0 ? oscMessage.args[0].value : 0
-            callback(value)
-          } catch (error) {
-            const err = error as Error
-            debug.error(`Error in OSCLeash listener for ${address}: ${err.message}`, {
-              address,
-              stack: err.stack
-            })
-          }
-        }
-      }
     })
     this.primaryUdpPort!.on("error", (error: Error & { code?: string }) => {
       debug.error(`OSC UDP port error: ${error.message}`, {
@@ -511,13 +491,6 @@ class OscService extends EventEmitter {
       })
     })
     return status
-  }
-
-  registerOSCLeashListener(address: string, callback: (value: unknown) => void): void {
-    this.oscLeashListeners.set(address, callback)
-  }
-  unregisterOSCLeashListener(address: string): void {
-    this.oscLeashListeners.delete(address)
   }
 }
 export default OscService
