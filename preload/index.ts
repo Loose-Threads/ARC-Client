@@ -21,6 +21,50 @@ interface WhisperConfigUpdate {
   categories?: string[]
 }
 
+// Subscribe to a main-process channel and return an unsubscribe closure.
+// Callers must use the returned function instead of removeAllListeners:
+// removeAllListeners drops every subscriber on the channel, so one
+// component unmounting would silently break any other component that
+// listens to the same event.
+function on(channel: string, callback: (data: any) => void): () => void {
+  const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
+  ipcRenderer.on(channel, handler)
+  return () => {
+    ipcRenderer.removeListener(channel, handler)
+  }
+}
+
+// ── Demand-driven OSC streams ──
+//
+// The main process buffers osc-received / osc-forwarded / websocket-osc-data
+// for the renderer. Those streams are high-frequency, so the main process
+// only collects them while at least one renderer consumer is subscribed.
+// Each stream is reference-counted here: the first subscriber tells main to
+// start collecting, the last unsubscribe tells it to stop.
+type OscStreamId = 'osc-received' | 'osc-forwarded' | 'websocket-osc-data'
+const streamRefCounts = new Map<OscStreamId, number>()
+function subscribeStream(stream: OscStreamId, channel: string, callback: (data: any) => void): () => void {
+  const count = streamRefCounts.get(stream) ?? 0
+  if (count === 0) {
+    ipcRenderer.send('osc-stream:acquire', stream)
+  }
+  streamRefCounts.set(stream, count + 1)
+  const unsubscribe = on(channel, callback)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    unsubscribe()
+    const remaining = (streamRefCounts.get(stream) ?? 1) - 1
+    if (remaining <= 0) {
+      streamRefCounts.delete(stream)
+      ipcRenderer.send('osc-stream:release', stream)
+    } else {
+      streamRefCounts.set(stream, remaining)
+    }
+  }
+}
+
 const api = {
   getConfig: () => ipcRenderer.invoke('get-config'),
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
@@ -191,127 +235,50 @@ const api = {
   // Error logging
   logRendererError: (error: any, context: any) => ipcRenderer.invoke('log-renderer-error', error, context),
   logRendererConsoleError: (args: any, context: any) => ipcRenderer.invoke('log-renderer-console-error', args, context),
-  // Event listeners
-  onOscReceived: (callback: (data: any) => void) => {
-    ipcRenderer.on('osc-received', (_event, data) => callback(data))
-  },
-  onOscForwarded: (callback: (data: any) => void) => {
-    ipcRenderer.on('osc-forwarded', (_event, data) => callback(data))
-  },
-  onOscReceivedBatch: (callback: (data: any) => void) => {
-    ipcRenderer.on('osc-received-batch', (_event, data) => callback(data))
-  },
-  onOscForwardedBatch: (callback: (data: any) => void) => {
-    ipcRenderer.on('osc-forwarded-batch', (_event, data) => callback(data))
-  },
-  onMemoryPressure: (callback: (data: any) => void) => {
-    ipcRenderer.on('memory-pressure', (_event, data) => callback(data))
-  },
-  onOscServerStatus: (callback: (data: any) => void) => {
-    ipcRenderer.on('osc-server-status', (_event, data) => callback(data))
-  },
-  onOscQueryStatus: (callback: (data: any) => void) => {
-    ipcRenderer.on('oscquery-status', (_event, data) => callback(data))
-  },
-  onParameterBlocklistUpdated: (callback: (data: any) => void) => {
-    ipcRenderer.on('parameter-blocklist-updated', (_event, data) => callback(data))
-  },
-  onParametersSuppressed: (callback: (data: any) => void) => {
-    ipcRenderer.on('parameters-suppressed', (_event, data) => callback(data))
-  },
-  onParametersUnsuppressed: (callback: (data: any) => void) => {
-    ipcRenderer.on('parameters-unsuppressed', (_event, data) => callback(data))
-  },
-  onUnsuppressDenied: (callback: (data: any) => void) => {
-    ipcRenderer.on('unsuppress-denied', (_event, data) => callback(data))
-  },
-  onVRChatConnectionStatus: (callback: (data: any) => void) => {
-    ipcRenderer.on('vrchat-connection-status', (_event, data) => callback(data))
-  },
-  onOscFlowStatus: (callback: (data: any) => void) => {
-    ipcRenderer.on('osc-flow-status', (_event, data) => callback(data))
-  },
-  onWebSocketStatus: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-status', (_event, data) => callback(data))
-  },
-  onWebSocketError: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-error', (_event, data) => callback(data))
-  },
-  onWebSocketAuthenticated: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-authenticated', (_event, data) => callback(data))
-  },
-  onWebSocketOscData: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-osc-data', (_event, data) => callback(data))
-  },
-  onWebSocketAvatarChange: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-avatar-change', (_event, data) => callback(data))
-  },
-  onWebSocketAvatarStateConfirmed: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-avatar-state-confirmed', (_event, data) => callback(data))
-  },
-  onVrchatAvatarChange: (callback: (data: any) => void) => {
-    ipcRenderer.on('vrchat-avatar-change', (_event, data) => callback(data))
-  },
-  onWebSocketParameterUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-parameter-update', (_event, data) => callback(data))
-  },
-  onWebSocketServerMessage: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-server-message', (_event, data) => callback(data))
-  },
-  onWebSocketPanelConnectionsUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('websocket-panel-connections-update', (_event, data) => callback(data))
-  },
-  onAppSettings: (callback: (data: any) => void) => {
-    ipcRenderer.on('app-settings', (_event, data) => callback(data))
-  },
-  onOSCLeashMovement: (callback: (data: any) => void) => {
-    ipcRenderer.on('oscleash-movement-data', (_event, data) => callback(data))
-  },
-  onOSCLeashStatusUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('oscleash-status-update', (_event, data) => callback(data))
-  },
-  onHyperateUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('hyperate-update', (_event, data) => callback(data))
-  },
-  onWhisperUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('whisper-update', (_event, data) => callback(data))
-  },
-  onWhisperCaptureControl: (callback: (data: any) => void) => {
-    ipcRenderer.on('whisper-capture-control', (_event, data) => callback(data))
-  },
-  onWhisperLevel: (callback: (level: number) => void) => {
-    ipcRenderer.on('whisper-level', (_event, level) => callback(level))
-  },
-  onOgbStatusUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('ogb-status-update', (_event, data) => callback(data))
-  },
-  onAutoStatusUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('autostatus-update', (_event, data) => callback(data))
-  },
-  onXsOverlayStatus: (callback: (data: any) => void) => {
-    ipcRenderer.on('xsoverlay-status', (_event, data) => callback(data))
-  },
-  onXsOverlayNotification: (callback: (data: any) => void) => {
-    ipcRenderer.on('xsoverlay-notification', (_event, data) => callback(data))
-  },
-  onFeedbackUpdate: (callback: (data: any) => void) => {
-    ipcRenderer.on('feedback-update', (_event, data) => callback(data))
-  },
-  onVRChatPipelineEvent: (callback: (data: any) => void) => {
-    ipcRenderer.on('vrchatapi-pipeline-event', (_event, data) => callback(data))
-  },
-  onSplashProgress: (callback: (data: any) => void) => {
-    ipcRenderer.on('splash-progress', (_event, data) => callback(data))
-  },
-  onNoticeBanner: (callback: (data: any) => void) => {
-    ipcRenderer.on('notice-banner', (_event, data) => callback(data))
-  },
-  onTelemetryChanged: (callback: (data: any) => void) => {
-    ipcRenderer.on('telemetry-changed', (_event, data) => callback(data))
-  },
-  removeAllListeners: (channel: string) => {
-    ipcRenderer.removeAllListeners(channel)
-  },
+  // Event listeners. Every on* method returns an unsubscribe closure —
+  // call it on unmount instead of removeAllListeners.
+  //
+  // The three high-frequency OSC streams go through subscribeStream so the
+  // main process only collects them while a consumer is mounted.
+  onOscReceived: (callback: (data: any) => void) => subscribeStream('osc-received', 'osc-received', callback),
+  onOscForwarded: (callback: (data: any) => void) => subscribeStream('osc-forwarded', 'osc-forwarded', callback),
+  onOscReceivedBatch: (callback: (data: any) => void) => subscribeStream('osc-received', 'osc-received-batch', callback),
+  onOscForwardedBatch: (callback: (data: any) => void) => subscribeStream('osc-forwarded', 'osc-forwarded-batch', callback),
+  onMemoryPressure: (callback: (data: any) => void) => on('memory-pressure', callback),
+  onOscServerStatus: (callback: (data: any) => void) => on('osc-server-status', callback),
+  onOscQueryStatus: (callback: (data: any) => void) => on('oscquery-status', callback),
+  onParameterBlocklistUpdated: (callback: (data: any) => void) => on('parameter-blocklist-updated', callback),
+  onParametersSuppressed: (callback: (data: any) => void) => on('parameters-suppressed', callback),
+  onParametersUnsuppressed: (callback: (data: any) => void) => on('parameters-unsuppressed', callback),
+  onUnsuppressDenied: (callback: (data: any) => void) => on('unsuppress-denied', callback),
+  onVRChatConnectionStatus: (callback: (data: any) => void) => on('vrchat-connection-status', callback),
+  onOscFlowStatus: (callback: (data: any) => void) => on('osc-flow-status', callback),
+  onWebSocketStatus: (callback: (data: any) => void) => on('websocket-status', callback),
+  onWebSocketError: (callback: (data: any) => void) => on('websocket-error', callback),
+  onWebSocketAuthenticated: (callback: (data: any) => void) => on('websocket-authenticated', callback),
+  onWebSocketOscData: (callback: (data: any) => void) => subscribeStream('websocket-osc-data', 'websocket-osc-data', callback),
+  onWebSocketAvatarChange: (callback: (data: any) => void) => on('websocket-avatar-change', callback),
+  onWebSocketAvatarStateConfirmed: (callback: (data: any) => void) => on('websocket-avatar-state-confirmed', callback),
+  onVrchatAvatarChange: (callback: (data: any) => void) => on('vrchat-avatar-change', callback),
+  onWebSocketParameterUpdate: (callback: (data: any) => void) => on('websocket-parameter-update', callback),
+  onWebSocketServerMessage: (callback: (data: any) => void) => on('websocket-server-message', callback),
+  onWebSocketPanelConnectionsUpdate: (callback: (data: any) => void) => on('websocket-panel-connections-update', callback),
+  onAppSettings: (callback: (data: any) => void) => on('app-settings', callback),
+  onOSCLeashMovement: (callback: (data: any) => void) => on('oscleash-movement-data', callback),
+  onOSCLeashStatusUpdate: (callback: (data: any) => void) => on('oscleash-status-update', callback),
+  onHyperateUpdate: (callback: (data: any) => void) => on('hyperate-update', callback),
+  onWhisperUpdate: (callback: (data: any) => void) => on('whisper-update', callback),
+  onWhisperCaptureControl: (callback: (data: any) => void) => on('whisper-capture-control', callback),
+  onWhisperLevel: (callback: (level: number) => void) => on('whisper-level', callback),
+  onOgbStatusUpdate: (callback: (data: any) => void) => on('ogb-status-update', callback),
+  onAutoStatusUpdate: (callback: (data: any) => void) => on('autostatus-update', callback),
+  onXsOverlayStatus: (callback: (data: any) => void) => on('xsoverlay-status', callback),
+  onXsOverlayNotification: (callback: (data: any) => void) => on('xsoverlay-notification', callback),
+  onFeedbackUpdate: (callback: (data: any) => void) => on('feedback-update', callback),
+  onVRChatPipelineEvent: (callback: (data: any) => void) => on('vrchatapi-pipeline-event', callback),
+  onSplashProgress: (callback: (data: any) => void) => on('splash-progress', callback),
+  onNoticeBanner: (callback: (data: any) => void) => on('notice-banner', callback),
+  onTelemetryChanged: (callback: (data: any) => void) => on('telemetry-changed', callback),
   // Shell and clipboard API for VRC Timeline
   openExternal: (url: string) => ipcRenderer.invoke('shell-open-external', url),
   clipboardWriteText: (text: string) => ipcRenderer.invoke('clipboard-write-text', text),
